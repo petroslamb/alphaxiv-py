@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Literal
 
 import click
 from rich.table import Table
@@ -61,7 +61,7 @@ def run_assistant_chat(
     paper_id: str | None = None,
     model: str | None = None,
     thinking: bool = True,
-    web_search: str = "off",
+    web_search: Literal["off", "full"] = "off",
     raw: bool = False,
 ) -> AssistantRun:
     state = {
@@ -239,7 +239,7 @@ def start_chat(
     message: str,
     paper_id: str | None,
     model: str | None,
-    web_search: str,
+    web_search: Literal["off", "full"],
     thinking: bool,
     raw: bool,
 ) -> None:
@@ -272,7 +272,7 @@ def start_chat(
 @click.option("--raw", is_flag=True, help="Print raw SSE event payloads.")
 def reply_chat(
     parts: tuple[str, ...],
-    web_search: str,
+    web_search: Literal["off", "full"],
     model: str | None,
     thinking: bool,
     raw: bool,
@@ -288,7 +288,11 @@ def reply_chat(
     effective_session_id = get_effective_session_id(session_id)
     assistant_context = load_assistant_context()
     paper_id = None
-    if assistant_context and assistant_context.session_id == effective_session_id and assistant_context.paper:
+    if (
+        assistant_context
+        and assistant_context.session_id == effective_session_id
+        and assistant_context.paper
+    ):
         paper_id = assistant_context.paper.preferred_id
 
     run = run_assistant_chat(

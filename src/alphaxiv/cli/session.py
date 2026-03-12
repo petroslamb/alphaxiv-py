@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import click
 
-from ..auth import authenticate_with_browser, clear_saved_auth, ensure_saved_auth, save_auth
+from ..auth import (
+    ALPHAXIV_API_KEY_ENV,
+    authenticate_with_api_key,
+    authenticate_with_browser,
+    clear_saved_auth,
+    ensure_saved_auth,
+    save_auth,
+)
 from ..paths import (
     get_assistant_context_path,
     get_auth_path,
@@ -59,20 +66,32 @@ def fetch_preferred_model(saved_auth) -> str | None:
 
 def register_session_commands(cli):
     @cli.command("login")
-    def login() -> None:
-        """Log in to alphaXiv via browser."""
-        console.print("[yellow]Opening browser for alphaXiv sign-in...[/yellow]")
-        console.print(f"[dim]Using persistent profile: {get_browser_profile_path()}[/dim]")
-        console.print()
-        console.print("[bold]Instructions[/bold]")
-        console.print("1. In the browser, use Continue with Google or any other alphaXiv sign-in path.")
-        console.print("2. Wait until the alphaXiv session is fully loaded.")
-        console.print("3. Press ENTER back in the terminal to save the bearer token.")
-        console.print()
-        try:
-            saved_auth = authenticate_with_browser()
-        except Exception as exc:
-            raise click.ClickException(str(exc)) from exc
+    @click.option(
+        "--api-key",
+        help="Save an explicit alphaXiv API key instead of opening the browser login flow.",
+    )
+    def login(api_key: str | None) -> None:
+        """Save alphaXiv authentication locally."""
+        if api_key:
+            try:
+                saved_auth = authenticate_with_api_key(api_key)
+            except Exception as exc:
+                raise click.ClickException(str(exc)) from exc
+        else:
+            console.print("[yellow]Opening browser for alphaXiv sign-in...[/yellow]")
+            console.print(f"[dim]Using persistent profile: {get_browser_profile_path()}[/dim]")
+            console.print()
+            console.print("[bold]Instructions[/bold]")
+            console.print(
+                "1. In the browser, use Continue with Google or any other alphaXiv sign-in path."
+            )
+            console.print("2. Wait until the alphaXiv session is fully loaded.")
+            console.print("3. Press ENTER back in the terminal to save the current bearer token.")
+            console.print()
+            try:
+                saved_auth = authenticate_with_browser()
+            except Exception as exc:
+                raise click.ClickException(str(exc)) from exc
 
         path = save_auth(saved_auth)
         console.print(f"[green]Authentication saved:[/green] {path}")
@@ -113,7 +132,9 @@ def register_session_commands(cli):
             console.print(render_auth_table(saved_auth, fetch_preferred_model(saved_auth)))
         else:
             console.print("[yellow]Not logged in to alphaXiv.[/yellow]")
-            console.print(f"[dim]Expected auth file: {get_auth_path()}[/dim]")
+            console.print(
+                f"[dim]Set {ALPHAXIV_API_KEY_ENV} or save auth to {get_auth_path()}[/dim]"
+            )
 
         resolved = load_context()
         assistant_context = load_assistant_context()
@@ -131,7 +152,9 @@ def register_session_commands(cli):
         else:
             console.print()
             console.print("[yellow]No current assistant chat is set.[/yellow]")
-            console.print(f"[dim]Expected assistant context file: {get_assistant_context_path()}[/dim]")
+            console.print(
+                f"[dim]Expected assistant context file: {get_assistant_context_path()}[/dim]"
+            )
 
     @cli.command("clear")
     def clear() -> None:

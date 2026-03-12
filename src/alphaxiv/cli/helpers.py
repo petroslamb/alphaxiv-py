@@ -25,7 +25,7 @@ def run_async(awaitable):
 
 
 def make_client() -> AlphaXivClient:
-    """Create a client that reuses saved auth when available."""
+    """Create a client that reuses ALPHAXIV_API_KEY or saved auth when available."""
     return AlphaXivClient(authorization=load_authorization())
 
 
@@ -127,12 +127,19 @@ def render_auth_table(saved_auth: SavedAuth, preferred_model: str | None = None)
     table.add_column("Field")
     table.add_column("Value")
     table.add_row("Status", "expired" if saved_auth.is_expired else "authenticated")
+    table.add_row("Source", saved_auth.source.replace("_", " "))
+    table.add_row("Kind", saved_auth.kind.replace("_", " "))
     table.add_row("User", saved_auth.display_name or "-")
     table.add_row("Email", saved_auth.email or "-")
     table.add_row("User ID", saved_auth.user_id or "-")
     table.add_row("Preferred Model", preferred_model or "-")
-    table.add_row("Saved At", saved_auth.created_at.isoformat())
-    table.add_row("Expires At", saved_auth.expires_at.isoformat() if saved_auth.expires_at else "-")
+    table.add_row(
+        "Saved At", "env" if saved_auth.source == "env" else saved_auth.created_at.isoformat()
+    )
+    table.add_row(
+        "Expires At",
+        saved_auth.expires_at.isoformat() if saved_auth.expires_at else "-",
+    )
     return table
 
 

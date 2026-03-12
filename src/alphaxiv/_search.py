@@ -41,9 +41,7 @@ class SearchAPI:
             return []
         return [str(item) for item in payload.get("data") or []]
 
-    async def homepage(
-        self, query: str, include_private: bool = False
-    ) -> HomepageSearchResults:
+    async def homepage(self, query: str, include_private: bool = False) -> HomepageSearchResults:
         papers, organizations, topics = await asyncio.gather(
             self.papers(query, include_private=include_private),
             self.organizations(query),

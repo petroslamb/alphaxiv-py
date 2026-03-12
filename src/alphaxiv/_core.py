@@ -116,8 +116,10 @@ class ClientCore:
 
             if response.status_code in RETRY_STATUSES and attempt < self._retries:
                 retry_after = response.headers.get("retry-after")
-                delay = float(retry_after) if retry_after and retry_after.isdigit() else 0.25 * (
-                    2**attempt
+                delay = (
+                    float(retry_after)
+                    if retry_after and retry_after.isdigit()
+                    else 0.25 * (2**attempt)
                 )
                 await asyncio.sleep(delay)
                 continue

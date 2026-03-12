@@ -5,15 +5,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import shutil
 import sys
-import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -26,6 +26,7 @@ LOCAL_STORAGE_TOKEN_KEYS = (
     "alphaxiv_client_api_key_original",
     "alphaxiv_client_api_key_impersonation",
 )
+ALPHAXIV_API_KEY_ENV = "ALPHAXIV_API_KEY"
 
 
 def _coalesce_string(*values: Any) -> str | None:
@@ -59,18 +60,35 @@ def _decode_token_expiry(access_token: str) -> datetime | None:
     if not isinstance(exp, int):
         return None
     try:
-        return datetime.fromtimestamp(exp, tz=timezone.utc)
+        return datetime.fromtimestamp(exp, tz=UTC)
     except (OverflowError, OSError, ValueError):
         return None
 
 
+def _normalize_bearer_secret(secret: str) -> str:
+    cleaned = secret.strip()
+    if cleaned.lower().startswith("bearer "):
+        return cleaned[7:].strip()
+    return cleaned
+
+
+def _detect_auth_kind(access_token: str) -> str:
+    if access_token.startswith("axv1_"):
+        return "api_key"
+    if _decode_token_expiry(access_token) is not None:
+        return "session_token"
+    return "bearer_token"
+
+
 @dataclass(slots=True)
 class SavedAuth:
-    """Locally persisted alphaXiv bearer auth."""
+    """Resolved alphaXiv bearer auth from disk, env, or browser login."""
 
     access_token: str
     created_at: datetime
     expires_at: datetime | None = None
+    kind: str = "bearer_token"
+    source: str = "saved"
     user: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
@@ -122,25 +140,38 @@ class SavedAuth:
 
     @property
     def is_expired(self) -> bool:
-        return self.expires_at is not None and self.expires_at <= datetime.now(timezone.utc)
+        return self.expires_at is not None and self.expires_at <= datetime.now(UTC)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "access_token": self.access_token,
             "created_at": self.created_at.isoformat(),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "kind": self.kind,
+            "source": self.source,
             "user": self.user,
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "SavedAuth":
+    def from_dict(cls, payload: dict[str, Any]) -> SavedAuth:
         created_at = payload.get("created_at")
         expires_at = payload.get("expires_at")
+        user_payload = payload.get("user")
         return cls(
             access_token=str(payload.get("access_token", "")),
-            created_at=_parse_iso_datetime(created_at) or datetime.now(timezone.utc),
+            created_at=_parse_iso_datetime(created_at) or datetime.now(UTC),
             expires_at=_parse_iso_datetime(expires_at),
-            user=payload.get("user") if isinstance(payload.get("user"), dict) else {},
+            kind=(
+                str(payload.get("kind")).strip()
+                if isinstance(payload.get("kind"), str) and str(payload.get("kind")).strip()
+                else _detect_auth_kind(str(payload.get("access_token", "")))
+            ),
+            source=(
+                str(payload.get("source")).strip()
+                if isinstance(payload.get("source"), str) and str(payload.get("source")).strip()
+                else "saved"
+            ),
+            user=cast(dict[str, Any], user_payload) if isinstance(user_payload, dict) else {},
         )
 
 
@@ -167,6 +198,24 @@ def load_saved_auth(path: Path | None = None) -> SavedAuth | None:
     return SavedAuth.from_dict(payload)
 
 
+def load_env_auth() -> SavedAuth | None:
+    """Load auth from ALPHAXIV_API_KEY when present."""
+    access_token = os.environ.get(ALPHAXIV_API_KEY_ENV)
+    if not access_token:
+        return None
+    normalized = _normalize_bearer_secret(access_token)
+    if not normalized:
+        return None
+    return SavedAuth(
+        access_token=normalized,
+        created_at=datetime.now(UTC),
+        expires_at=_decode_token_expiry(normalized),
+        kind=_detect_auth_kind(normalized),
+        source="env",
+        user={},
+    )
+
+
 def load_authorization() -> str | None:
     """Load the saved Authorization header value, if present."""
     saved_auth = ensure_saved_auth()
@@ -186,12 +235,12 @@ def save_auth(saved_auth: SavedAuth, path: Path | None = None) -> Path:
 
 
 def ensure_saved_auth(timeout: float = DEFAULT_TIMEOUT) -> SavedAuth | None:
-    """Load auth from disk and refresh it from the browser profile when needed."""
-    saved_auth = load_saved_auth()
-    if saved_auth and not saved_auth.is_expired:
-        return saved_auth
-    refreshed_auth = refresh_saved_auth(timeout=timeout)
-    return refreshed_auth or saved_auth
+    """Load auth from ALPHAXIV_API_KEY or disk without browser refresh."""
+    _ = timeout
+    env_auth = load_env_auth()
+    if env_auth:
+        return env_auth
+    return load_saved_auth()
 
 
 def clear_saved_auth(*, path: Path | None = None, clear_browser_profile: bool = False) -> None:
@@ -254,38 +303,39 @@ def fetch_current_user(access_token: str, timeout: float = DEFAULT_TIMEOUT) -> d
     return {"raw": payload}
 
 
-def build_saved_auth(access_token: str, *, user: dict[str, Any] | None = None) -> SavedAuth:
+def build_saved_auth(
+    access_token: str,
+    *,
+    user: dict[str, Any] | None = None,
+    kind: str | None = None,
+    source: str = "saved",
+) -> SavedAuth:
     """Construct a SavedAuth instance from a bearer token."""
+    normalized = _normalize_bearer_secret(access_token)
     return SavedAuth(
-        access_token=access_token,
-        created_at=datetime.now(timezone.utc),
-        expires_at=_decode_token_expiry(access_token),
+        access_token=normalized,
+        created_at=datetime.now(UTC),
+        expires_at=_decode_token_expiry(normalized),
+        kind=kind or _detect_auth_kind(normalized),
+        source=source,
         user=user or {},
     )
 
 
-def refresh_saved_auth(timeout: float = DEFAULT_TIMEOUT) -> SavedAuth | None:
-    """Refresh the saved Clerk token from the persistent browser profile."""
-    browser_profile = get_browser_profile_path()
-    if not browser_profile.exists():
-        return None
-    try:
-        access_token = _extract_access_token_for_refresh()
-    except RuntimeError:
-        return None
-    if not access_token:
-        return None
-    user_payload = fetch_current_user(access_token, timeout=timeout)
-    saved_auth = build_saved_auth(access_token, user=user_payload)
-    save_auth(saved_auth)
-    return saved_auth
+def authenticate_with_api_key(api_key: str, timeout: float = DEFAULT_TIMEOUT) -> SavedAuth:
+    """Validate and package an explicit alphaXiv API key."""
+    normalized = _normalize_bearer_secret(api_key)
+    if not normalized:
+        raise RuntimeError("API key cannot be empty.")
+    user_payload = fetch_current_user(normalized, timeout=timeout)
+    return build_saved_auth(normalized, user=user_payload, kind="api_key", source="saved")
 
 
 def authenticate_with_browser() -> SavedAuth:
     """Open a browser for alphaXiv login, then capture and validate a bearer token."""
     browser_profile = get_browser_profile_path()
     browser_profile.mkdir(parents=True, exist_ok=True, mode=0o700)
-    access_token = _extract_access_token_from_browser_profile(headless=False, interactive=True)
+    access_token = _extract_access_token_from_browser_profile(interactive=True)
 
     if not access_token:
         raise RuntimeError(
@@ -293,33 +343,23 @@ def authenticate_with_browser() -> SavedAuth:
         )
 
     user_payload = fetch_current_user(access_token)
-    return build_saved_auth(access_token, user=user_payload)
+    return build_saved_auth(access_token, user=user_payload, source="browser")
 
 
-def _extract_access_token_for_refresh() -> str | None:
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return _extract_access_token_from_browser_profile(headless=True)
-    return _run_in_thread(lambda: _extract_access_token_from_browser_profile(headless=True))
-
-
-def _extract_access_token_from_browser_profile(
-    *, headless: bool, interactive: bool = False
-) -> str | None:
+def _extract_access_token_from_browser_profile(*, interactive: bool = False) -> str | None:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise RuntimeError(
-            "Playwright is not installed. Run 'uv sync --extra browser' and "
-            "'uv run playwright install chromium' first."
+            "Playwright browser support is not installed. Run 'uv sync --extra browser' and "
+            "'uv run playwright install chromium' before using browser login."
         ) from exc
 
     browser_profile = get_browser_profile_path()
     with _windows_playwright_event_loop(), sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(
             user_data_dir=str(browser_profile),
-            headless=headless,
+            headless=False,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--password-store=basic",
@@ -379,24 +419,6 @@ def _extract_access_token(page: Any) -> str | None:
     if isinstance(token, str) and token.strip():
         return token.strip()
     return None
-
-
-def _run_in_thread(func):
-    result: dict[str, Any] = {}
-    error: dict[str, BaseException] = {}
-
-    def _target() -> None:
-        try:
-            result["value"] = func()
-        except BaseException as exc:  # pragma: no cover - forwarded immediately
-            error["value"] = exc
-
-    thread = threading.Thread(target=_target, daemon=True)
-    thread.start()
-    thread.join()
-    if "value" in error:
-        raise error["value"]
-    return result.get("value")
 
 
 @contextmanager

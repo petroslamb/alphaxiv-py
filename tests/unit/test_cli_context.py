@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from click.testing import CliRunner
 
@@ -16,9 +16,9 @@ from alphaxiv.types import (
     OverviewSummary,
     OverviewTranslationStatus,
     PaperFullText,
-    PaperTranscript,
     PaperOverview,
     PaperTextPage,
+    PaperTranscript,
     PodcastTranscriptLine,
     ResolvedPaper,
     SearchResult,
@@ -34,7 +34,7 @@ def test_login_command_saves_auth(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
     saved_auth = SavedAuth(
         access_token="test-token",
-        created_at=datetime(2026, 3, 11, tzinfo=timezone.utc),
+        created_at=datetime(2026, 3, 11, tzinfo=UTC),
         expires_at=None,
         user={"name": "Petros", "email": "petros@example.com"},
     )
@@ -49,13 +49,36 @@ def test_login_command_saves_auth(monkeypatch, tmp_path) -> None:
     assert loaded.email == "petros@example.com"
 
 
+def test_login_command_saves_api_key(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    saved_auth = SavedAuth(
+        access_token="axv1_test-token",
+        created_at=datetime(2026, 3, 11, tzinfo=UTC),
+        expires_at=None,
+        kind="api_key",
+        source="saved",
+        user={"name": "Petros", "email": "petros@example.com"},
+    )
+    monkeypatch.setattr(session_cli, "authenticate_with_api_key", lambda _api_key: saved_auth)
+
+    result = runner.invoke(cli, ["login", "--api-key", "axv1_test-token"])
+
+    assert result.exit_code == 0
+    assert "Authentication saved" in result.output
+    loaded = load_saved_auth()
+    assert loaded is not None
+    assert loaded.access_token == "axv1_test-token"
+    assert loaded.kind == "api_key"
+
+
 def test_logout_command_clears_saved_auth(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
     save_auth(
         SavedAuth(
             access_token="test-token",
-            created_at=datetime(2026, 3, 11, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 11, tzinfo=UTC),
             expires_at=None,
             user={"email": "petros@example.com"},
         )
@@ -100,12 +123,14 @@ def test_status_shows_saved_auth(monkeypatch, tmp_path) -> None:
     save_auth(
         SavedAuth(
             access_token="test-token",
-            created_at=datetime(2026, 3, 11, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 11, tzinfo=UTC),
             expires_at=None,
             user={"name": "Petros", "email": "petros@example.com"},
         )
     )
-    monkeypatch.setattr(session_cli, "fetch_preferred_model", lambda _saved_auth: "claude-4.6-sonnet")
+    monkeypatch.setattr(
+        session_cli, "fetch_preferred_model", lambda _saved_auth: "claude-4.6-sonnet"
+    )
 
     status = runner.invoke(cli, ["status"])
 
@@ -113,6 +138,8 @@ def test_status_shows_saved_auth(monkeypatch, tmp_path) -> None:
     assert "alphaXiv Authentication" in status.output
     assert "petros@example.com" in status.output
     assert "claude-4.6-sonnet" in status.output
+    assert "saved" in status.output
+    assert "bearer token" in status.output
 
 
 def test_overview_uses_current_context(monkeypatch, tmp_path) -> None:
@@ -353,9 +380,7 @@ def test_search_papers_command(monkeypatch) -> None:
 
 def test_search_organizations_command(monkeypatch) -> None:
     runner = CliRunner()
-    organizations = [
-        OrganizationResult(id="org-mit", name="MIT", image=None, slug="mit", raw={})
-    ]
+    organizations = [OrganizationResult(id="org-mit", name="MIT", image=None, slug="mit", raw={})]
     monkeypatch.setattr(explore_cli, "fetch_organization_search", lambda _query: organizations)
 
     result = runner.invoke(cli, ["search-organizations", "mit"])

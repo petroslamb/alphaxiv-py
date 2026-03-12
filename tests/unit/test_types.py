@@ -1,18 +1,5 @@
 from __future__ import annotations
 
-from alphaxiv.types import (
-    FeedCard,
-    Mention,
-    OrganizationResult,
-    OverviewStatus,
-    Paper,
-    PaperFullText,
-    PaperTranscript,
-    PaperOverview,
-    ResolvedPaper,
-    SearchResult,
-)
-
 from tests.fixtures import (
     FULL_TEXT_PAYLOAD,
     LEGACY_PAYLOAD,
@@ -22,6 +9,19 @@ from tests.fixtures import (
     OVERVIEW_STATUS_PAYLOAD,
     SEARCH_PAYLOAD,
     TRANSCRIPT_PAYLOAD,
+)
+
+from alphaxiv.types import (
+    FeedCard,
+    Mention,
+    OrganizationResult,
+    OverviewStatus,
+    Paper,
+    PaperFullText,
+    PaperOverview,
+    PaperTranscript,
+    ResolvedPaper,
+    SearchResult,
 )
 
 

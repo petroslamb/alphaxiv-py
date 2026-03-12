@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 import json
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 
@@ -28,7 +28,7 @@ def parse_timestamp_ms(value: int | None) -> datetime | None:
     if not isinstance(value, int):
         return None
     try:
-        return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(value / 1000, tz=UTC)
     except (OverflowError, OSError, ValueError):
         return None
 
@@ -42,7 +42,7 @@ class SearchResult:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "SearchResult":
+    def from_payload(cls, payload: dict[str, Any]) -> SearchResult:
         return cls(
             link=payload.get("link", ""),
             paper_id=payload.get("paperId", ""),
@@ -61,7 +61,7 @@ class OrganizationResult:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "OrganizationResult":
+    def from_payload(cls, payload: dict[str, Any]) -> OrganizationResult:
         name = " ".join(str(payload.get("name", "")).split())
         for marker in ("[", "http://", "https://"):
             if marker in name:
@@ -119,7 +119,7 @@ class FeedCard:
         return f"/abs/{self.paper_id}"
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "FeedCard":
+    def from_payload(cls, payload: dict[str, Any]) -> FeedCard:
         metrics = payload.get("metrics") or {}
         visits = metrics.get("visits_count") or {}
         summary = payload.get("paper_summary") or {}
@@ -187,7 +187,7 @@ class ResolvedPaper:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ResolvedPaper":
+    def from_dict(cls, payload: dict[str, Any]) -> ResolvedPaper:
         return cls(
             input_id=payload.get("input_id", ""),
             versionless_id=payload.get("versionless_id"),
@@ -205,9 +205,11 @@ class AssistantSession:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "AssistantSession":
+    def from_payload(cls, payload: dict[str, Any]) -> AssistantSession:
         newest = payload.get("newestMessage")
-        newest_message_at = parse_timestamp_ms(newest) if isinstance(newest, int) else parse_datetime(newest)
+        newest_message_at = (
+            parse_timestamp_ms(newest) if isinstance(newest, int) else parse_datetime(newest)
+        )
         return cls(
             id=payload.get("id", ""),
             title=payload.get("title"),
@@ -232,7 +234,7 @@ class AssistantMessage:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "AssistantMessage":
+    def from_payload(cls, payload: dict[str, Any]) -> AssistantMessage:
         return cls(
             id=payload.get("id", ""),
             message_type=payload.get("type", ""),
@@ -265,7 +267,7 @@ class AssistantStreamEvent:
         return self.delta or self.content or self.error_message or ""
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "AssistantStreamEvent":
+    def from_payload(cls, payload: dict[str, Any]) -> AssistantStreamEvent:
         error_message = None
         if payload.get("type") == "error":
             error = payload.get("error")
@@ -290,6 +292,7 @@ class AssistantStreamEvent:
             error_message=error_message,
             raw=payload,
         )
+
 
 @dataclass(slots=True)
 class AssistantRun:
@@ -326,12 +329,14 @@ class AssistantContext:
             "session_id": self.session_id,
             "variant": self.variant,
             "paper": self.paper.to_dict() if self.paper else None,
-            "newest_message_at": self.newest_message_at.isoformat() if self.newest_message_at else None,
+            "newest_message_at": self.newest_message_at.isoformat()
+            if self.newest_message_at
+            else None,
             "title": self.title,
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "AssistantContext":
+    def from_dict(cls, payload: dict[str, Any]) -> AssistantContext:
         paper_payload = payload.get("paper")
         paper = ResolvedPaper.from_dict(paper_payload) if isinstance(paper_payload, dict) else None
         return cls(
@@ -352,7 +357,7 @@ class Author:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "Author":
+    def from_payload(cls, payload: dict[str, Any]) -> Author:
         return cls(
             id=payload.get("id", ""),
             full_name=payload.get("full_name", ""),
@@ -373,7 +378,7 @@ class PaperMetrics:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any] | None) -> "PaperMetrics | None":
+    def from_payload(cls, payload: dict[str, Any] | None) -> PaperMetrics | None:
         if not payload:
             return None
         return cls(
@@ -397,7 +402,7 @@ class ImplementationResource:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, provider: str, payload: dict[str, Any]) -> "ImplementationResource":
+    def from_payload(cls, provider: str, payload: dict[str, Any]) -> ImplementationResource:
         return cls(
             provider=provider,
             url=payload.get("url", ""),
@@ -425,7 +430,7 @@ class PaperVersion:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "PaperVersion":
+    def from_payload(cls, payload: dict[str, Any]) -> PaperVersion:
         return cls(
             id=payload.get("id", ""),
             version_label=payload.get("version_label", ""),
@@ -463,7 +468,7 @@ class PaperGroup:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "PaperGroup":
+    def from_payload(cls, payload: dict[str, Any]) -> PaperGroup:
         resources = []
         for provider, resource_payload in (payload.get("resources") or {}).items():
             if isinstance(resource_payload, dict) and resource_payload.get("url"):
@@ -511,12 +516,14 @@ class Paper:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, resolved: ResolvedPaper, payload: dict[str, Any]) -> "Paper":
+    def from_payload(cls, resolved: ResolvedPaper, payload: dict[str, Any]) -> Paper:
         paper = payload.get("paper") or {}
         version = PaperVersion.from_payload(paper.get("paper_version") or {})
         group = PaperGroup.from_payload(paper.get("paper_group") or {})
         authors = [Author.from_payload(item) for item in paper.get("authors") or []]
-        verified_authors = [Author.from_payload(item) for item in paper.get("verified_authors") or []]
+        verified_authors = [
+            Author.from_payload(item) for item in paper.get("verified_authors") or []
+        ]
         pdf_info = paper.get("pdf_info") or {}
         return cls(
             resolved=resolved,
@@ -543,7 +550,7 @@ class OverviewSummary:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any] | None) -> "OverviewSummary | None":
+    def from_payload(cls, payload: dict[str, Any] | None) -> OverviewSummary | None:
         if not payload:
             return None
         return cls(
@@ -565,7 +572,7 @@ class Citation:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "Citation":
+    def from_payload(cls, payload: dict[str, Any]) -> Citation:
         return cls(
             title=payload.get("title", ""),
             full_citation=payload.get("fullCitation", ""),
@@ -590,7 +597,7 @@ class PaperOverview:
     @classmethod
     def from_payload(
         cls, *, version_id: str, language: str, payload: dict[str, Any]
-    ) -> "PaperOverview":
+    ) -> PaperOverview:
         return cls(
             version_id=version_id,
             language=language,
@@ -614,7 +621,7 @@ class OverviewTranslationStatus:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, language: str, payload: dict[str, Any]) -> "OverviewTranslationStatus":
+    def from_payload(cls, language: str, payload: dict[str, Any]) -> OverviewTranslationStatus:
         return cls(
             language=language,
             state=payload.get("state", ""),
@@ -634,7 +641,7 @@ class OverviewStatus:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, *, version_id: str, payload: dict[str, Any]) -> "OverviewStatus":
+    def from_payload(cls, *, version_id: str, payload: dict[str, Any]) -> OverviewStatus:
         translations = {
             language: OverviewTranslationStatus.from_payload(language, translation_payload)
             for language, translation_payload in (payload.get("translations") or {}).items()
@@ -656,9 +663,7 @@ class PaperTextPage:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(
-        cls, payload: dict[str, Any], *, fallback_page_number: int
-    ) -> "PaperTextPage":
+    def from_payload(cls, payload: dict[str, Any], *, fallback_page_number: int) -> PaperTextPage:
         page_number = payload.get("pageNumber")
         if not isinstance(page_number, int) or page_number <= 0:
             page_number = fallback_page_number
@@ -684,7 +689,7 @@ class PaperFullText:
         return "\n\n".join(page.text for page in self.pages if page.text)
 
     @classmethod
-    def from_payload(cls, resolved: ResolvedPaper, payload: dict[str, Any]) -> "PaperFullText":
+    def from_payload(cls, resolved: ResolvedPaper, payload: dict[str, Any]) -> PaperFullText:
         pages = [
             PaperTextPage.from_payload(page_payload, fallback_page_number=index)
             for index, page_payload in enumerate(payload.get("pages") or [], start=1)
@@ -700,7 +705,7 @@ class PodcastTranscriptLine:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "PodcastTranscriptLine":
+    def from_payload(cls, payload: dict[str, Any]) -> PodcastTranscriptLine:
         return cls(
             speaker=payload.get("speaker"),
             line=payload.get("line", ""),
@@ -718,7 +723,9 @@ class PaperTranscript:
     @property
     def text(self) -> str:
         return "\n".join(
-            f"{line.speaker}: {line.line}" if line.speaker else line.line for line in self.lines if line.line
+            f"{line.speaker}: {line.line}" if line.speaker else line.line
+            for line in self.lines
+            if line.line
         )
 
     @classmethod
@@ -728,8 +735,10 @@ class PaperTranscript:
         resolved: ResolvedPaper,
         transcript_url: str,
         payload: list[dict[str, Any]],
-    ) -> "PaperTranscript":
-        lines = [PodcastTranscriptLine.from_payload(item) for item in payload if isinstance(item, dict)]
+    ) -> PaperTranscript:
+        lines = [
+            PodcastTranscriptLine.from_payload(item) for item in payload if isinstance(item, dict)
+        ]
         return cls(
             resolved=resolved,
             transcript_url=transcript_url,
@@ -754,7 +763,7 @@ class Mention:
     raw: dict[str, Any] = field(repr=False)
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "Mention":
+    def from_payload(cls, payload: dict[str, Any]) -> Mention:
         return cls(
             id=payload.get("id", ""),
             post_id=payload.get("postId", ""),

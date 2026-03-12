@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.fixtures import ABS_HTML
+
 from alphaxiv._identifiers import (
     extract_resolution_from_html,
     is_bare_arxiv_id,
@@ -7,8 +9,6 @@ from alphaxiv._identifiers import (
     is_versioned_arxiv_id,
     normalize_identifier,
 )
-
-from tests.fixtures import ABS_HTML
 
 
 def test_normalize_identifier_supports_alphaxiv_urls() -> None:

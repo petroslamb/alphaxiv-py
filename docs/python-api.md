@@ -8,14 +8,14 @@ from alphaxiv import AlphaXivClient
 
 Use `AlphaXivClient` as an async context manager.
 
-If you have already signed in with `alphaxiv login`, you can reuse the saved bearer token:
+Recommended authenticated usage is an explicit API key:
 
 ```python
-async with AlphaXivClient.from_saved_auth() as client:
+async with AlphaXivClient(api_key="axv1_...") as client:
     results = await client.search.papers("attention is all you need")
 ```
 
-`AlphaXivClient.from_saved_auth()` also refreshes expired saved tokens from the persisted browser profile when possible.
+`AlphaXivClient.from_saved_auth()` loads `ALPHAXIV_API_KEY` first and then falls back to saved local auth from `alphaxiv login` or `alphaxiv login --api-key ...`.
 
 ## Search
 

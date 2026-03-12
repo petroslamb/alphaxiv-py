@@ -3,10 +3,20 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import datetime, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime
 
 from alphaxiv import auth
-from alphaxiv.auth import build_saved_auth, clear_saved_auth, ensure_saved_auth, load_authorization, load_saved_auth, save_auth
+from alphaxiv.auth import (
+    ALPHAXIV_API_KEY_ENV,
+    authenticate_with_api_key,
+    build_saved_auth,
+    clear_saved_auth,
+    ensure_saved_auth,
+    load_authorization,
+    load_saved_auth,
+    save_auth,
+)
 from alphaxiv.paths import get_auth_path, get_browser_profile_path
 
 
@@ -14,7 +24,7 @@ def _make_jwt(expiry_timestamp: int) -> str:
     header = {"alg": "none", "typ": "JWT"}
     payload = {"exp": expiry_timestamp}
 
-    def _encode(part: dict[str, object]) -> str:
+    def _encode(part: Mapping[str, object]) -> str:
         encoded = base64.urlsafe_b64encode(json.dumps(part).encode("utf-8")).decode("utf-8")
         return encoded.rstrip("=")
 
@@ -30,7 +40,7 @@ def test_build_saved_auth_decodes_jwt_expiry() -> None:
     assert saved_auth.display_name == "Petros"
     assert saved_auth.email == "petros@example.com"
     assert saved_auth.authorization_header.startswith("Bearer ")
-    assert saved_auth.expires_at == datetime.fromtimestamp(1_900_000_000, tz=timezone.utc)
+    assert saved_auth.expires_at == datetime.fromtimestamp(1_900_000_000, tz=UTC)
 
 
 def test_save_and_load_auth(monkeypatch, tmp_path) -> None:
@@ -63,39 +73,44 @@ def test_clear_saved_auth_removes_browser_profile(monkeypatch, tmp_path) -> None
     assert not browser_profile.exists()
 
 
-def test_ensure_saved_auth_refreshes_expired_token(monkeypatch, tmp_path) -> None:
+def test_ensure_saved_auth_returns_expired_saved_auth_without_refresh(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
     expired_auth = build_saved_auth(
         _make_jwt(1_700_000_000),
         user={"email": "stale@example.com"},
     )
     save_auth(expired_auth)
-    refreshed_auth = build_saved_auth(
-        _make_jwt(1_900_000_000),
-        user={"email": "fresh@example.com"},
-    )
-    monkeypatch.setattr(auth, "refresh_saved_auth", lambda timeout=30.0: refreshed_auth)
 
     active_auth = ensure_saved_auth()
 
     assert active_auth is not None
-    assert active_auth.email == "fresh@example.com"
+    assert active_auth.email == "stale@example.com"
+    assert active_auth.is_expired
 
 
-def test_load_authorization_refreshes_in_running_event_loop(monkeypatch, tmp_path) -> None:
+def test_load_authorization_uses_env_api_key_first(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    expired_auth = build_saved_auth(
-        _make_jwt(1_700_000_000),
-        user={"email": "stale@example.com"},
-    )
-    save_auth(expired_auth)
-    get_browser_profile_path().mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(auth, "_extract_access_token_from_browser_profile", lambda **_kwargs: "fresh-token")
-    monkeypatch.setattr(auth, "fetch_current_user", lambda _token, timeout=30.0: {"email": "fresh@example.com"})
+    save_auth(build_saved_auth("saved-token"))
+    monkeypatch.setenv(ALPHAXIV_API_KEY_ENV, "axv1_env-token")
 
     async def _load() -> str | None:
         return load_authorization()
 
     authorization = asyncio.run(_load())
 
-    assert authorization == "Bearer fresh-token"
+    assert authorization == "Bearer axv1_env-token"
+
+
+def test_authenticate_with_api_key_validates_and_marks_kind(monkeypatch) -> None:
+    monkeypatch.setattr(
+        auth, "fetch_current_user", lambda _token, timeout=30.0: {"email": "petros@example.com"}
+    )
+
+    saved_auth = authenticate_with_api_key("Bearer axv1_test-token")
+
+    assert saved_auth.access_token == "axv1_test-token"
+    assert saved_auth.kind == "api_key"
+    assert saved_auth.source == "saved"
+    assert saved_auth.email == "petros@example.com"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import importlib
+from datetime import UTC, datetime
 
 from click.testing import CliRunner
 
@@ -12,11 +13,8 @@ from alphaxiv.types import (
     AssistantContext,
     AssistantMessage,
     AssistantRun,
-    AssistantSession,
     ResolvedPaper,
 )
-
-import importlib
 
 assistant_cli = importlib.import_module("alphaxiv.cli.assistant")
 
@@ -34,7 +32,7 @@ def test_assistant_context_round_trip(monkeypatch, tmp_path) -> None:
         session_id="session-1",
         variant="paper",
         paper=paper,
-        newest_message_at=datetime(2026, 3, 12, 8, 0, tzinfo=timezone.utc),
+        newest_message_at=datetime(2026, 3, 12, 8, 0, tzinfo=UTC),
         title="Helios chat",
     )
 
@@ -83,7 +81,7 @@ def test_assistant_cli_start_saves_context(monkeypatch, tmp_path) -> None:
     run = AssistantRun(
         session_id="session-new",
         session_title="Helios follow-up",
-        newest_message_at=datetime(2026, 3, 12, 8, 0, tzinfo=timezone.utc),
+        newest_message_at=datetime(2026, 3, 12, 8, 0, tzinfo=UTC),
         variant="homepage",
         paper=None,
         message="Tell me about Helios.",
@@ -124,7 +122,7 @@ def test_assistant_cli_history_uses_current_context(monkeypatch, tmp_path) -> No
             id="message-input",
             message_type="input_text",
             parent_message_id=None,
-            selected_at=datetime(2026, 3, 12, 8, 0, tzinfo=timezone.utc),
+            selected_at=datetime(2026, 3, 12, 8, 0, tzinfo=UTC),
             tool_use_id=None,
             kind=None,
             content="What is Helios?",
@@ -138,7 +136,7 @@ def test_assistant_cli_history_uses_current_context(monkeypatch, tmp_path) -> No
             id="message-output",
             message_type="output_text",
             parent_message_id="message-input",
-            selected_at=datetime(2026, 3, 12, 8, 1, tzinfo=timezone.utc),
+            selected_at=datetime(2026, 3, 12, 8, 1, tzinfo=UTC),
             tool_use_id=None,
             kind=None,
             content="Helios is a video model.",

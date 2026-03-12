@@ -3,6 +3,7 @@
 ## Context
 
 ```bash
+alphaxiv login --api-key "$ALPHAXIV_API_KEY"
 alphaxiv login
 alphaxiv use 1706.03762
 alphaxiv status
@@ -10,11 +11,22 @@ alphaxiv logout
 alphaxiv clear
 ```
 
-`login` opens a visible browser profile under `ALPHAXIV_HOME`, waits for you to complete the alphaXiv sign-in flow, then saves the resulting bearer token to `auth.json`. Later CLI commands refresh that token from the same browser profile when needed.
+`login --api-key <key>` validates and saves an explicit alphaXiv API key to `auth.json`.
+
+`login` without `--api-key` opens a visible browser profile under `ALPHAXIV_HOME`, waits for you to complete the alphaXiv sign-in flow, then saves the currently available bearer token to `auth.json`.
+
+Browser support is optional. Install it only if you need browser login:
+
+```bash
+uv sync --extra browser
+uv run playwright install chromium
+```
+
+This flow launches visible Chromium. A headless browser is not required for normal API-key usage.
 
 `logout` removes the saved bearer token. Add `--clear-browser-profile` if you also want to remove the cached Playwright browser profile.
 
-`status` now prints saved auth, the current paper context, and the current assistant session context when present.
+`status` prints auth loaded from `ALPHAXIV_API_KEY` or `auth.json`, plus the current paper context and current assistant session context when present.
 
 ## Search
 

@@ -1,11 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
-from alphaxiv import AlphaXivClient
-from alphaxiv.auth import build_saved_auth, save_auth
-from alphaxiv.exceptions import AuthRequiredError
-
 from tests.fixtures import (
     ABS_HTML,
     ASSISTANT_ERROR_STREAM_RESPONSE,
@@ -27,6 +22,10 @@ from tests.fixtures import (
     TRANSCRIPT_PAYLOAD,
 )
 
+from alphaxiv import AlphaXivClient
+from alphaxiv.auth import build_saved_auth, save_auth
+from alphaxiv.exceptions import AuthRequiredError
+
 
 @pytest.mark.asyncio
 async def test_search_papers(httpx_mock) -> None:
@@ -44,7 +43,9 @@ async def test_search_papers(httpx_mock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_from_saved_auth_sends_authorization_header(httpx_mock, monkeypatch, tmp_path) -> None:
+async def test_from_saved_auth_sends_authorization_header(
+    httpx_mock, monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
     save_auth(build_saved_auth("saved-token"))
     httpx_mock.add_response(
@@ -155,8 +156,14 @@ async def test_overview_and_resources(httpx_mock) -> None:
     assert resources.implementations[0].url == "https://github.com/PKU-YuanGroup/Helios"
     assert resources.citation is not None
     assert "@article{yuan2026helios" in resources.citation
-    assert resources.podcast_url == "https://paper-podcasts.alphaxiv.org/019cbc05-f11c-75c7-a13b-b028107d6a76/podcast.mp3"
-    assert resources.transcript_url == "https://paper-podcasts.alphaxiv.org/019cbc05-f11c-75c7-a13b-b028107d6a76/transcript.json"
+    assert (
+        resources.podcast_url
+        == "https://paper-podcasts.alphaxiv.org/019cbc05-f11c-75c7-a13b-b028107d6a76/podcast.mp3"
+    )
+    assert (
+        resources.transcript_url
+        == "https://paper-podcasts.alphaxiv.org/019cbc05-f11c-75c7-a13b-b028107d6a76/transcript.json"
+    )
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ._core import BASE_API_URL, BASE_WEB_URL, ClientCore
 from .exceptions import APIError
@@ -27,7 +27,7 @@ FEED_SOURCES = ("GitHub", "Twitter (X)")
 _REF_ASSIGN_RE = re.compile(r"\$R\[\d+\]=")
 _REF_RE = re.compile(r"\$R\[(\d+)\]")
 _STRING_RE = re.compile(r'("(?:[^"\\]|\\.)*")')
-_KEY_RE = re.compile(r'([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)')
+_KEY_RE = re.compile(r"([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)")
 
 _INTERVAL_TO_DAYS = {
     "3 days": 3,
@@ -195,10 +195,10 @@ def _matches_interval(card: FeedCard, interval: str | None) -> bool:
         return True
     if card.publication_date is None:
         return False
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     published = card.publication_date
     if published.tzinfo is None:
-        published = published.replace(tzinfo=timezone.utc)
+        published = published.replace(tzinfo=UTC)
     return published >= now - timedelta(days=days)
 
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import builtins
 import inspect
 import json
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime, timezone
 from typing import Any, Literal
 
 from ._core import BASE_API_URL, ClientCore
@@ -63,16 +63,18 @@ class AssistantAPI:
         self,
         paper_id: str | None = None,
         limit: int | None = None,
-    ) -> list[AssistantSession]:
+    ) -> builtins.list[AssistantSession]:
         self._require_auth()
         params = await self._list_params(paper_id)
         payload = await self._core.get_json(f"{BASE_API_URL}/assistant/v2", params=params)
         if not isinstance(payload, list):
             raise AlphaXivError("Unexpected assistant sessions payload.")
-        sessions = [AssistantSession.from_payload(item) for item in payload if isinstance(item, dict)]
+        sessions = [
+            AssistantSession.from_payload(item) for item in payload if isinstance(item, dict)
+        ]
         return sessions[:limit] if limit is not None else sessions
 
-    async def history(self, session_id: str) -> list[AssistantMessage]:
+    async def history(self, session_id: str) -> builtins.list[AssistantMessage]:
         self._require_auth()
         payload = await self._core.get_json(f"{BASE_API_URL}/assistant/v2/{session_id}/messages")
         if not isinstance(payload, list):
@@ -202,6 +204,7 @@ class AssistantAPI:
         if not paper_id:
             return {"variant": "homepage"}
         paper = await self._resolve_paper(paper_id)
+        assert paper is not None
         return {"variant": "paper", "paperVersion": paper.version_id}
 
     async def _chat_payload(
@@ -280,8 +283,8 @@ class AssistantAPI:
 
     def _derive_created_session(
         self,
-        before_sessions: list[AssistantSession],
-        after_sessions: list[AssistantSession],
+        before_sessions: builtins.list[AssistantSession],
+        after_sessions: builtins.list[AssistantSession],
     ) -> AssistantSession | None:
         before_map = {session.id: session for session in before_sessions}
         new_sessions = [session for session in after_sessions if session.id not in before_map]
@@ -293,12 +296,18 @@ class AssistantAPI:
             previous = before_map.get(session.id)
             if previous is None:
                 continue
-            previous_ts = previous.newest_message_at.timestamp() if previous.newest_message_at else -1.0
-            current_ts = session.newest_message_at.timestamp() if session.newest_message_at else -1.0
+            previous_ts = (
+                previous.newest_message_at.timestamp() if previous.newest_message_at else -1.0
+            )
+            current_ts = (
+                session.newest_message_at.timestamp() if session.newest_message_at else -1.0
+            )
             if current_ts > previous_ts:
                 changed_sessions.append((session, current_ts - previous_ts))
         if changed_sessions:
-            return max(changed_sessions, key=lambda item: (item[1], self._session_sort_key(item[0])))[0]
+            return max(
+                changed_sessions, key=lambda item: (item[1], self._session_sort_key(item[0]))
+            )[0]
 
         if after_sessions:
             return max(after_sessions, key=self._session_sort_key)
@@ -327,7 +336,7 @@ class AssistantAPI:
                 if event is not None:
                     yield event
 
-    def _parse_sse_event(self, lines: list[str]) -> AssistantStreamEvent | None:
+    def _parse_sse_event(self, lines: builtins.list[str]) -> AssistantStreamEvent | None:
         if not lines:
             return None
         data_chunks = [line[5:].lstrip() for line in lines if line.startswith("data:")]

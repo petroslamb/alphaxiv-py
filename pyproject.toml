@@ -22,9 +22,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://www.alphaxiv.org"
-Repository = "https://www.alphaxiv.org"
-Documentation = "https://www.alphaxiv.org"
+Homepage = "https://github.com/petroslamb/alphaxiv-py"
+Repository = "https://github.com/petroslamb/alphaxiv-py"
+Documentation = "https://github.com/petroslamb/alphaxiv-py#readme"
+Issues = "https://github.com/petroslamb/alphaxiv-py/issues"
 
 [project.optional-dependencies]
 browser = [

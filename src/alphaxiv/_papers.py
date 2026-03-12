@@ -117,7 +117,9 @@ class PapersAPI:
         resolved = await self.resolve(identifier)
         if not resolved.version_id:
             raise ResolutionError(f"Could not determine a paper version UUID for '{identifier}'.")
-        payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/{resolved.version_id}/full-text")
+        payload = await self._core.get_json(
+            f"{BASE_API_URL}/papers/v3/{resolved.version_id}/full-text"
+        )
         if not isinstance(payload, dict):
             raise ResolutionError(f"Unexpected full-text payload for '{identifier}'.")
         return PaperFullText.from_payload(resolved, payload)

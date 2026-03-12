@@ -5,7 +5,14 @@ from __future__ import annotations
 import click
 from rich.table import Table
 
-from ..types import OverviewStatus, Paper, PaperFullText, PaperOverview, PaperResources, PaperTranscript
+from ..types import (
+    OverviewStatus,
+    Paper,
+    PaperFullText,
+    PaperOverview,
+    PaperResources,
+    PaperTranscript,
+)
 from .helpers import console, get_effective_identifier, make_client, run_async
 
 paper = click.Group("paper", help="Paper metadata commands.")
@@ -130,7 +137,9 @@ def register_paper_commands(cli):
     @cli.command("overview")
     @click.argument("paper_id", required=False)
     @click.option("--language", default="en", show_default=True)
-    @click.option("--machine", is_flag=True, help="Print the raw machine-readable overview markdown.")
+    @click.option(
+        "--machine", is_flag=True, help="Print the raw machine-readable overview markdown."
+    )
     def overview(paper_id: str | None, language: str, machine: bool) -> None:
         """Show the AI overview for a paper."""
         identifier = get_effective_identifier(paper_id)
@@ -154,7 +163,9 @@ def register_paper_commands(cli):
         table.add_column("Value")
         table.add_row("Version UUID", status_obj.version_id)
         table.add_row("State", status_obj.state or "-")
-        table.add_row("Updated At", status_obj.updated_at.isoformat() if status_obj.updated_at else "-")
+        table.add_row(
+            "Updated At", status_obj.updated_at.isoformat() if status_obj.updated_at else "-"
+        )
         table.add_row(
             "Languages",
             ", ".join(sorted(status_obj.translations)) if status_obj.translations else "-",

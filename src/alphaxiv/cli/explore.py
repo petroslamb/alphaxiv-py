@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 from rich.table import Table
 
-from .._explore import FEED_INTERVALS, FEED_MENU_CATEGORIES, FEED_SORTS
+from .._explore import FEED_SORTS
 from ..types import (
     ExploreFilterOptions,
     FeedCard,
@@ -115,7 +115,9 @@ def _render_topics_table(topics: list[str]) -> None:
     console.print(table)
 
 
-def _render_organizations_table(organizations: list[OrganizationResult], title: str = "Organizations") -> None:
+def _render_organizations_table(
+    organizations: list[OrganizationResult], title: str = "Organizations"
+) -> None:
     table = Table(title=title)
     table.add_column("Name")
     table.add_column("Slug")
@@ -205,7 +207,9 @@ def list_feed(
     table.add_column("X Likes")
     table.add_column("Tags")
     for card in cards:
-        publication_date = card.publication_date.date().isoformat() if card.publication_date else "-"
+        publication_date = (
+            card.publication_date.date().isoformat() if card.publication_date else "-"
+        )
         tags = ", ".join(card.topics[:3]) or "-"
         github_stars = str(card.github_stars) if card.github_stars is not None else "-"
         x_likes = str(card.x_likes) if card.x_likes else "-"

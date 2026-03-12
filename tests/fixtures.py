@@ -307,7 +307,7 @@ ASSISTANT_HISTORY_PAYLOAD = [
         "type": "tool_use",
         "toolUseId": None,
         "kind": "Embedding Similarity Search",
-        "content": "{\"query\":\"helios video generation\"}",
+        "content": '{"query":"helios video generation"}',
         "model": "aurelle-1",
         "feedbackType": None,
         "feedbackCategory": None,

@@ -4,7 +4,8 @@
 
 This v1 release is intentionally public-first. It supports:
 
-- browser-assisted alphaXiv login with saved bearer auth
+- API-key auth via `ALPHAXIV_API_KEY` or locally saved bearer auth
+- optional browser-assisted login for capturing the current alphaXiv web token
 - authenticated assistant chat for homepage and paper-scoped sessions
 - homepage search suggestions for papers, topics, and organizations
 - homepage feed/card retrieval with sort and filter support
@@ -18,7 +19,7 @@ This v1 release is intentionally public-first. It supports:
 - PDF URL lookup and download
 - CLI context around a current paper
 
-The login flow is still browser-assisted because alphaXiv uses Clerk in the web app. Once logged in, assistant chat uses direct authenticated API calls plus SSE streaming rather than Playwright UI automation. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
+Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv login --api-key ...`. Browser automation is optional and only used when you explicitly run `alphaxiv login` without an API key. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
 
 ## Installation
 
@@ -26,16 +27,35 @@ The login flow is still browser-assisted because alphaXiv uses Clerk in the web 
 uv pip install -e .
 ```
 
-Browser login support is optional:
+No browser dependencies are required for normal CLI or SDK usage.
+
+Recommended auth setup:
+
+```bash
+export ALPHAXIV_API_KEY="axv1_..."
+alphaxiv assistant list
+```
+
+If you prefer to save the key locally:
+
+```bash
+alphaxiv login --api-key "$ALPHAXIV_API_KEY"
+```
+
+Browser login support is optional and only needed for `alphaxiv login` without `--api-key`:
 
 ```bash
 uv sync --extra browser
 uv run playwright install chromium
 ```
 
+That flow launches a visible Chromium window. A headless browser is not required for normal API-key usage.
+
 ## CLI Quick Start
 
 ```bash
+export ALPHAXIV_API_KEY="axv1_..."
+alphaxiv login --api-key "$ALPHAXIV_API_KEY"
 alphaxiv login
 alphaxiv search "graph neural networks for molecules"
 alphaxiv search-papers "graph neural networks for molecules"
@@ -69,12 +89,13 @@ alphaxiv pdf download ./helios.pdf
 
 ```python
 import asyncio
+import os
 
 from alphaxiv import AlphaXivClient
 
 
 async def main() -> None:
-    async with AlphaXivClient.from_saved_auth() as client:
+    async with AlphaXivClient(api_key=os.environ["ALPHAXIV_API_KEY"]) as client:
         homepage = await client.search.homepage("graph neural networks for molecules")
         print(homepage.papers[0].paper_id, homepage.papers[0].title)
 
@@ -111,10 +132,11 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-If you have not run `alphaxiv login`, `AlphaXivClient.from_saved_auth()` behaves like an anonymous client.
+`AlphaXivClient.from_saved_auth()` also works with `ALPHAXIV_API_KEY` and then falls back to locally saved auth.
 
 ## Docs
 
 - [CLI reference](docs/cli-reference.md)
 - [Python API](docs/python-api.md)
 - [Development](docs/development.md)
+- [API inventory](docs/api-inventory.md)
