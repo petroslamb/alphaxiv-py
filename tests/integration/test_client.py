@@ -476,6 +476,83 @@ async def test_folders_list(httpx_mock) -> None:
 
 
 @pytest.mark.asyncio
+async def test_folders_get_by_name(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/folders/v3",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        json=FOLDERS_PAYLOAD,
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        folder = await client.folders.get("Reading List")
+
+    assert folder.id == "folder-reading"
+
+
+@pytest.mark.asyncio
+async def test_folders_add_papers(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/folders/v3",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        json=FOLDERS_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/folders/v3/folder-reading/add-papers",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={"paperGroupIds": ["019cbc05-f11c-75c7-a13b-b028107d6a76"]},
+        status_code=204,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/folders/v3",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        json=FOLDERS_PAYLOAD,
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        folder = await client.folders.add_papers(
+            "folder-reading",
+            ["019cbc05-f11c-75c7-a13b-b028107d6a76"],
+        )
+
+    assert folder.id == "folder-reading"
+
+
+@pytest.mark.asyncio
+async def test_folders_remove_papers(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/folders/v3",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        json=FOLDERS_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/folders/v3/folder-reading/remove-papers",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={"paperGroupIds": ["019cbc05-f11c-75c7-a13b-b028107d6a76"]},
+        status_code=204,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/folders/v3",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        json=FOLDERS_PAYLOAD,
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        folder = await client.folders.remove_papers(
+            "Reading List",
+            ["019cbc05-f11c-75c7-a13b-b028107d6a76"],
+        )
+
+    assert folder.id == "folder-reading"
+
+
+@pytest.mark.asyncio
 async def test_comment_toggle_upvote(httpx_mock) -> None:
     httpx_mock.add_response(
         method="POST",

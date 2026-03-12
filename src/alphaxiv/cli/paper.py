@@ -9,8 +9,10 @@ from rich.table import Table
 from rich.tree import Tree
 
 from .._comments import VALID_COMMENT_TAGS
+from ..exceptions import ResolutionError
 from ..types import (
     FeedCard,
+    Folder,
     OverviewStatus,
     Paper,
     PaperComment,
@@ -48,6 +50,17 @@ paper_comments = WrappedHelpGroup(
 paper_pdf = WrappedHelpGroup(
     "pdf",
     help="Resolve or download the public PDF for a paper.",
+)
+
+paper_folders = WrappedHelpGroup(
+    "folders",
+    help=(
+        "Inspect or mutate the authenticated folder membership for a paper.\n\n"
+        "Examples:\n"
+        "  alphaxiv paper folders list 1706.03762\n"
+        '  alphaxiv paper folders add 1706.03762 "Want to read"\n'
+        '  alphaxiv paper folders remove 1706.03762 "Want to read"'
+    ),
 )
 
 
@@ -211,6 +224,49 @@ def fetch_pdf_download(identifier: str, path: str | Path) -> Path:
     return run_async(_download())
 
 
+def fetch_paper_folder_membership(identifier: str) -> tuple[str, str, list[Folder]]:
+    async def _get() -> tuple[str, str, list[Folder]]:
+        async with make_client() as client:
+            resolved = await client.papers.resolve(identifier)
+            if not resolved.group_id:
+                raise ResolutionError(
+                    "Paper folder membership requires a bare or versioned arXiv ID. "
+                    f"Could not determine a paper group ID for '{identifier}'."
+                )
+            folders = await client.folders.list()
+            return resolved.preferred_id, resolved.group_id, folders
+
+    return run_async(_get())
+
+
+def add_paper_to_folder(identifier: str, folder_selector: str) -> Folder:
+    async def _add() -> Folder:
+        async with make_client() as client:
+            resolved = await client.papers.resolve(identifier)
+            if not resolved.group_id:
+                raise ResolutionError(
+                    "Paper folder mutations require a bare or versioned arXiv ID. "
+                    f"Could not determine a paper group ID for '{identifier}'."
+                )
+            return await client.folders.add_papers(folder_selector, [resolved.group_id])
+
+    return run_async(_add())
+
+
+def remove_paper_from_folder(identifier: str, folder_selector: str) -> Folder:
+    async def _remove() -> Folder:
+        async with make_client() as client:
+            resolved = await client.papers.resolve(identifier)
+            if not resolved.group_id:
+                raise ResolutionError(
+                    "Paper folder mutations require a bare or versioned arXiv ID. "
+                    f"Could not determine a paper group ID for '{identifier}'."
+                )
+            return await client.folders.remove_papers(folder_selector, [resolved.group_id])
+
+    return run_async(_remove())
+
+
 def _confirm_mutation(yes: bool, prompt: str) -> None:
     if yes:
         return
@@ -248,6 +304,28 @@ def _render_similar_cards(cards: list[FeedCard]) -> None:
             str(card.upvotes),
             str(card.visits),
             ", ".join(card.topics[:3]) or "-",
+        )
+    console.print(table)
+
+
+def _render_paper_folder_membership(
+    preferred_id: str,
+    paper_group_id: str,
+    folder_items: list[Folder],
+) -> None:
+    table = Table(title=f"Folder Membership for {preferred_id}")
+    table.add_column("Saved")
+    table.add_column("Folder")
+    table.add_column("Folder ID")
+    table.add_column("Type")
+    table.add_column("Papers")
+    for folder in folder_items:
+        table.add_row(
+            "yes" if folder.contains_paper_group_id(paper_group_id) else "no",
+            folder.name,
+            folder.id,
+            folder.folder_type or "-",
+            str(folder.paper_count),
         )
     console.print(table)
 
@@ -469,6 +547,72 @@ def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
         console.print(page.text or "[dim]No text returned.[/dim]")
 
 
+@paper_folders.command("list")
+@click.argument("paper_id", required=False)
+@click.option("--raw", is_flag=True, help="Print the raw folder payloads with membership context.")
+def list_paper_folders(paper_id: str | None, raw: bool) -> None:
+    """Show which folders currently contain the selected paper."""
+    identifier = get_effective_identifier(paper_id)
+    preferred_id, paper_group_id, folder_items = fetch_paper_folder_membership(identifier)
+    if raw:
+        print_json(
+            {
+                "paper_id": preferred_id,
+                "paper_group_id": paper_group_id,
+                "folders": [
+                    {
+                        **folder.raw,
+                        "containsPaper": folder.contains_paper_group_id(paper_group_id),
+                    }
+                    for folder in folder_items
+                ],
+            }
+        )
+        return
+    _render_paper_folder_membership(preferred_id, paper_group_id, folder_items)
+
+
+@paper_folders.command("add")
+@click.argument("args", nargs=-1)
+@click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
+def add_paper_folder(args: tuple[str, ...], yes: bool) -> None:
+    """Save a paper into one of the authenticated user's folders."""
+    if len(args) == 1:
+        paper_id = None
+        folder_selector = args[0]
+    elif len(args) == 2:
+        paper_id, folder_selector = args
+    else:
+        raise click.UsageError("Expected either <folder> or <paper-id> <folder>.")
+
+    identifier = get_effective_identifier(paper_id)
+    _confirm_mutation(yes, f"Save '{identifier}' into alphaXiv folder '{folder_selector}'?")
+    folder = add_paper_to_folder(identifier, folder_selector)
+    console.print(f"[green]Saved[/green] {identifier} [green]to folder[/green] {folder.name}")
+
+
+@paper_folders.command("remove")
+@click.argument("args", nargs=-1)
+@click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
+def remove_paper_folder(args: tuple[str, ...], yes: bool) -> None:
+    """Remove a paper from one of the authenticated user's folders."""
+    if len(args) == 1:
+        paper_id = None
+        folder_selector = args[0]
+    elif len(args) == 2:
+        paper_id, folder_selector = args
+    else:
+        raise click.UsageError("Expected either <folder> or <paper-id> <folder>.")
+
+    identifier = get_effective_identifier(paper_id)
+    _confirm_mutation(
+        yes,
+        f"Remove '{identifier}' from alphaXiv folder '{folder_selector}'?",
+    )
+    folder = remove_paper_from_folder(identifier, folder_selector)
+    console.print(f"[green]Removed[/green] {identifier} [green]from folder[/green] {folder.name}")
+
+
 @paper_comments.command("list")
 @click.argument("paper_id", required=False)
 @click.option("--raw", is_flag=True, help="Print the raw comments JSON payload.")
@@ -630,3 +774,4 @@ def download_pdf(args: tuple[str, ...]) -> None:
 
 paper.add_command(paper_comments)
 paper.add_command(paper_pdf)
+paper.add_command(paper_folders)

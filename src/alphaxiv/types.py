@@ -304,6 +304,8 @@ class FolderPaper:
     abstract: str | None
     topics: list[str]
     raw: dict[str, Any] = field(repr=False)
+    authors: list[str] = field(default_factory=list)
+    added_at: datetime | None = None
 
     @property
     def preferred_id(self) -> str:
@@ -313,6 +315,14 @@ class FolderPaper:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> FolderPaper:
+        author_items = payload.get("authors") or []
+        authors: list[str] = []
+        for item in author_items:
+            if not isinstance(item, dict):
+                continue
+            author_name = item.get("full_name") or item.get("name") or item.get("username")
+            if isinstance(author_name, str) and author_name:
+                authors.append(author_name)
         return cls(
             paper_group_id=payload.get("paperGroupId", ""),
             universal_paper_id=payload.get("universalPaperId") or payload.get("universal_paper_id"),
@@ -321,6 +331,8 @@ class FolderPaper:
             title=payload.get("title", ""),
             abstract=payload.get("abstract"),
             topics=list(payload.get("topics") or []),
+            authors=authors,
+            added_at=parse_datetime(payload.get("addedAt") or payload.get("added_at")),
             raw=payload,
         )
 
@@ -339,6 +351,9 @@ class Folder:
     @property
     def paper_count(self) -> int:
         return len(self.papers)
+
+    def contains_paper_group_id(self, paper_group_id: str) -> bool:
+        return any(paper.paper_group_id == paper_group_id for paper in self.papers)
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> Folder:

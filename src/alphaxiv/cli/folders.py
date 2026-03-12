@@ -23,6 +23,32 @@ def fetch_folders() -> list[Folder]:
     return run_async(_list())
 
 
+def fetch_folder(selector: str) -> Folder:
+    async def _get() -> Folder:
+        async with make_client() as client:
+            return await client.folders.get(selector)
+
+    return run_async(_get())
+
+
+def _render_folder_papers(folder: Folder) -> None:
+    papers_table = Table(title=f"{folder.name} Papers")
+    papers_table.add_column("Paper ID")
+    papers_table.add_column("Title")
+    papers_table.add_column("Authors")
+    papers_table.add_column("Added")
+    papers_table.add_column("Topics")
+    for paper in folder.papers:
+        papers_table.add_row(
+            paper.preferred_id,
+            paper.title or "-",
+            ", ".join(paper.authors[:3]) or "-",
+            paper.added_at.date().isoformat() if paper.added_at else "-",
+            ", ".join(paper.topics[:3]) or "-",
+        )
+    console.print(papers_table)
+
+
 @folders.command("list")
 @click.option(
     "--papers",
@@ -57,14 +83,26 @@ def list_folders(show_papers: bool, raw: bool) -> None:
 
     for folder in folder_items:
         console.print()
-        papers_table = Table(title=f"{folder.name} Papers")
-        papers_table.add_column("Paper ID")
-        papers_table.add_column("Title")
-        papers_table.add_column("Topics")
-        for paper in folder.papers:
-            papers_table.add_row(
-                paper.preferred_id,
-                paper.title or "-",
-                ", ".join(paper.topics[:3]) or "-",
-            )
-        console.print(papers_table)
+        _render_folder_papers(folder)
+
+
+@folders.command("show")
+@click.argument("folder")
+@click.option("--raw", is_flag=True, help="Print the raw folder JSON payload.")
+def show_folder(folder: str, raw: bool) -> None:
+    """Show a single folder and the full paper list loaded from alphaXiv."""
+    folder_item = fetch_folder(folder)
+    if raw:
+        print_json(folder_item.raw)
+        return
+
+    table = Table(title=folder_item.name)
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("Folder ID", folder_item.id)
+    table.add_row("Type", folder_item.folder_type or "-")
+    table.add_row("Sharing", folder_item.sharing_status or "-")
+    table.add_row("Papers", str(folder_item.paper_count))
+    console.print(table)
+    console.print()
+    _render_folder_papers(folder_item)

@@ -540,3 +540,133 @@ def test_folders_list_command(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Reading List" in result.output
     assert "Helios" in result.output
+
+
+def test_folders_show_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        folders_cli,
+        "fetch_folder",
+        lambda _selector: Folder(
+            id="folder-reading",
+            name="Reading List",
+            folder_type="collection",
+            order=1,
+            parent_id=None,
+            sharing_status="private",
+            papers=[
+                FolderPaper(
+                    paper_group_id="019cbc05-f11c-75c7-a13b-b028107d6a76",
+                    universal_paper_id="2603.04379",
+                    canonical_id="2603.04379v1",
+                    version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
+                    title="Helios",
+                    abstract="We introduce Helios.",
+                    topics=["Computer Science"],
+                    authors=["Shenghai Yuan"],
+                    raw={},
+                )
+            ],
+            raw={},
+        ),
+    )
+
+    result = runner.invoke(cli, ["folders", "show", "Reading List"])
+
+    assert result.exit_code == 0
+    assert "Reading List" in result.output
+    assert "folder-reading" in result.output
+    assert "Helios" in result.output
+
+
+def test_paper_folders_list_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        paper_cli,
+        "fetch_paper_folder_membership",
+        lambda _identifier: (
+            "1706.03762v7",
+            "015c9ef4-ac30-768d-928b-847320902575",
+            [
+                Folder(
+                    id="folder-completed",
+                    name="Completed",
+                    folder_type="default-completed",
+                    order=2,
+                    parent_id=None,
+                    sharing_status="private",
+                    papers=[
+                        FolderPaper(
+                            paper_group_id="015c9ef4-ac30-768d-928b-847320902575",
+                            universal_paper_id="1706.03762",
+                            canonical_id="1706.03762v7",
+                            version_id="0189b531-a930-7613-9d2e-dd918c8435a5",
+                            title="Attention Is All You Need",
+                            abstract=None,
+                            topics=["transformers"],
+                            raw={},
+                        )
+                    ],
+                    raw={},
+                )
+            ],
+        ),
+    )
+
+    result = runner.invoke(cli, ["paper", "folders", "list", "1706.03762"])
+
+    assert result.exit_code == 0
+    assert "Folder Membership for 1706.03762v7" in result.output
+    assert "Completed" in result.output
+    assert "yes" in result.output
+
+
+def test_paper_folders_add_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        paper_cli,
+        "add_paper_to_folder",
+        lambda _identifier, _folder: Folder(
+            id="folder-reading",
+            name="Reading List",
+            folder_type="collection",
+            order=1,
+            parent_id=None,
+            sharing_status="private",
+            papers=[],
+            raw={},
+        ),
+    )
+
+    result = runner.invoke(cli, ["paper", "folders", "add", "1706.03762", "Reading List", "--yes"])
+
+    assert result.exit_code == 0
+    assert "Saved" in result.output
+    assert "Reading List" in result.output
+
+
+def test_paper_folders_remove_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        paper_cli,
+        "remove_paper_from_folder",
+        lambda _identifier, _folder: Folder(
+            id="folder-reading",
+            name="Reading List",
+            folder_type="collection",
+            order=1,
+            parent_id=None,
+            sharing_status="private",
+            papers=[],
+            raw={},
+        ),
+    )
+
+    result = runner.invoke(
+        cli,
+        ["paper", "folders", "remove", "1706.03762", "Reading List", "--yes"],
+    )
+
+    assert result.exit_code == 0
+    assert "Removed" in result.output
+    assert "Reading List" in result.output

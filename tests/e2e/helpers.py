@@ -12,7 +12,7 @@ from click.testing import CliRunner, Result
 from alphaxiv import AlphaXivClient
 from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.auth import ALPHAXIV_API_KEY_ENV
-from alphaxiv.types import AssistantContext, PaperComment
+from alphaxiv.types import AssistantContext, Folder, PaperComment
 
 LIVE_SMOKE_ENV = "ALPHAXIV_RUN_E2E"
 LIVE_ASSISTANT_WRITES_ENV = "ALPHAXIV_RUN_ASSISTANT_WRITES"
@@ -169,3 +169,77 @@ def load_saved_assistant_context() -> AssistantContext | None:
     from alphaxiv.cli.helpers import load_assistant_context
 
     return load_assistant_context()
+
+
+async def _fetch_folders(api_key: str) -> list[Folder]:
+    async with AlphaXivClient(api_key=api_key) as client:
+        return await client.folders.list()
+
+
+def fetch_folders(api_key: str) -> list[Folder]:
+    return asyncio.run(_fetch_folders(api_key))
+
+
+async def _fetch_paper_group_id(api_key: str, paper_id: str) -> str:
+    async with AlphaXivClient(api_key=api_key) as client:
+        resolved = await client.papers.resolve(paper_id)
+        if not resolved.group_id:
+            raise AssertionError(f"No paper group id was available for '{paper_id}'.")
+        return resolved.group_id
+
+
+def fetch_paper_group_id(api_key: str, paper_id: str = SMOKE_PAPER_ID) -> str:
+    return asyncio.run(_fetch_paper_group_id(api_key, paper_id))
+
+
+def find_folder_membership_target(
+    api_key: str,
+    *,
+    paper_id: str = SMOKE_PAPER_ID,
+) -> tuple[Folder, bool]:
+    paper_group_id = fetch_paper_group_id(api_key, paper_id)
+    folders = fetch_folders(api_key)
+    if not folders:
+        raise AssertionError("No live alphaXiv folders were returned.")
+
+    without_paper = [
+        folder for folder in folders if not folder.contains_paper_group_id(paper_group_id)
+    ]
+    if without_paper:
+        return without_paper[0], False
+    return folders[0], True
+
+
+def wait_for_folder_membership_state(
+    api_key: str,
+    folder_selector: str,
+    paper_group_id: str,
+    expected: bool,
+    *,
+    attempts: int = 5,
+    delay_seconds: float = 1.0,
+) -> Folder:
+    last_seen: Folder | None = None
+    for attempt in range(attempts):
+        folders = fetch_folders(api_key)
+        folder = next(
+            (
+                item
+                for item in folders
+                if item.id == folder_selector or item.name.casefold() == folder_selector.casefold()
+            ),
+            None,
+        )
+        if folder is None:
+            raise AssertionError(f"Folder '{folder_selector}' was not found in live alphaXiv data.")
+        last_seen = folder
+        has_paper = folder.contains_paper_group_id(paper_group_id)
+        if has_paper is expected:
+            return folder
+        if attempt < attempts - 1:
+            time.sleep(delay_seconds)
+    raise AssertionError(
+        f"Folder '{folder_selector}' did not reach contains_paper_group_id={expected} for "
+        f"{paper_group_id}. Last observed value: "
+        f"{last_seen.contains_paper_group_id(paper_group_id) if last_seen else 'unknown'}."
+    )
