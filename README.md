@@ -4,30 +4,32 @@
 
 This v1 release is intentionally public-first. It supports:
 
-- API-key auth via `ALPHAXIV_API_KEY` or locally saved bearer auth
-- optional browser-assisted login for capturing the current alphaXiv web token
+- API-key auth via `ALPHAXIV_API_KEY` or a locally saved alphaXiv API key
 - authenticated assistant chat for homepage and paper-scoped sessions
 - homepage search suggestions for papers, topics, and organizations
 - homepage feed/card retrieval with sort and filter support
 - bare and versioned arXiv ID resolution
 - paper metadata
+- public paper comments
 - paper full text
 - AI overview/blog payloads
 - overview status and translation availability
+- similar-paper recommendations
 - mentions/resources aggregation
 - podcast transcript retrieval
 - PDF URL lookup and download
-- CLI context around a current paper
+- authenticated folder listing
+- authenticated assistant URL metadata lookup
+- authenticated paper votes plus comment create, reply, delete, and upvote mutations
+- CLI context around a current paper and assistant session
 
-Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv login --api-key ...`. Browser automation is optional and only used when you explicitly run `alphaxiv login` without an API key. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
+Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv auth set-api-key`. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
 
 ## Installation
 
 ```bash
 uv pip install -e .
 ```
-
-No browser dependencies are required for normal CLI or SDK usage.
 
 Recommended auth setup:
 
@@ -39,29 +41,29 @@ alphaxiv assistant list
 If you prefer to save the key locally:
 
 ```bash
-alphaxiv login --api-key "$ALPHAXIV_API_KEY"
+alphaxiv auth set-api-key --api-key "$ALPHAXIV_API_KEY"
 ```
 
-Browser login support is optional and only needed for `alphaxiv login` without `--api-key`:
-
-```bash
-uv sync --extra browser
-uv run playwright install chromium
-```
-
-That flow launches a visible Chromium window. A headless browser is not required for normal API-key usage.
+Users create API keys in the alphaXiv web app. This package does not create or manage API keys remotely.
 
 ## CLI Quick Start
 
+The CLI is resource-first. The top-level surface is grouped into `auth`, `context`, `search`,
+`feed`, `paper`, `assistant`, and `folders`.
+
 ```bash
 export ALPHAXIV_API_KEY="axv1_..."
-alphaxiv login --api-key "$ALPHAXIV_API_KEY"
-alphaxiv login
-alphaxiv search "graph neural networks for molecules"
-alphaxiv search-papers "graph neural networks for molecules"
-alphaxiv search-organizations "graph neural networks for molecules"
-alphaxiv search-topics "graph neural networks for molecules"
+alphaxiv auth set-api-key --api-key "$ALPHAXIV_API_KEY"
+alphaxiv auth status
+alphaxiv context use paper 2603.04379
+alphaxiv context show
+alphaxiv search all "graph neural networks for molecules"
+alphaxiv search papers "graph neural networks for molecules"
+alphaxiv search organizations "graph neural networks for molecules"
+alphaxiv search topics "graph neural networks for molecules"
 alphaxiv assistant list
+alphaxiv assistant model
+alphaxiv assistant url-metadata https://github.com/PKU-YuanGroup/Helios
 alphaxiv assistant set-model "Claude 4.6 Sonnet"
 alphaxiv assistant start "Find papers on agent frameworks"
 alphaxiv assistant start --model "GPT 5.4" "Find papers on agent frameworks"
@@ -70,19 +72,29 @@ alphaxiv assistant history
 alphaxiv feed filters
 alphaxiv feed list --sort likes --limit 5
 alphaxiv feed list --organization MIT --source twitter --limit 5
-alphaxiv use 2603.04379
-alphaxiv status
-alphaxiv logout
 alphaxiv paper show
+alphaxiv paper abstract
+alphaxiv paper summary
+alphaxiv paper comments list
+alphaxiv paper comments add --body "Helpful note"
+alphaxiv paper comments reply <comment-id> --body "Thanks"
+alphaxiv paper comments upvote <comment-id> --yes
+alphaxiv paper comments delete <comment-id> --yes
+alphaxiv paper similar --limit 5
 alphaxiv paper text --page 1
-alphaxiv overview
-alphaxiv overview --machine
-alphaxiv overview-status
-alphaxiv resources
-alphaxiv resources --bibtex
-alphaxiv resources --transcript
-alphaxiv pdf url
-alphaxiv pdf download ./helios.pdf
+alphaxiv paper vote --yes
+alphaxiv paper view --yes
+alphaxiv paper overview
+alphaxiv paper overview --machine
+alphaxiv paper overview-status
+alphaxiv paper resources
+alphaxiv paper resources --bibtex
+alphaxiv paper resources --transcript
+alphaxiv paper pdf url
+alphaxiv paper pdf download ./helios.pdf
+alphaxiv folders list --papers
+alphaxiv context clear
+alphaxiv auth clear
 ```
 
 ## Python Quick Start
@@ -110,6 +122,9 @@ async def main() -> None:
         paper = await client.papers.get("2603.04379")
         print(paper.version.title)
 
+        comments = await client.papers.comments("2603.04379")
+        print(comments[0].body if comments else "no comments")
+
         full_text = await client.papers.full_text("2603.04379")
         print(full_text.pages[0].text[:200])
 
@@ -122,8 +137,17 @@ async def main() -> None:
         transcript = await client.papers.transcript("2603.04379")
         print(transcript.lines[0].speaker, transcript.lines[0].line[:80])
 
+        similar = await client.papers.similar("2603.04379", limit=3)
+        print([card.paper_id for card in similar])
+
         sessions = await client.assistant.list()
         print(sessions[0].id, sessions[0].title)
+
+        metadata = await client.assistant.url_metadata("https://github.com/PKU-YuanGroup/Helios")
+        print(metadata.title)
+
+        folders = await client.folders.list()
+        print(folders[0].name if folders else "no folders")
 
         run = await client.assistant.ask("Find papers on agent frameworks")
         print(run.session_id, run.output_text[:120])
@@ -132,7 +156,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`AlphaXivClient.from_saved_auth()` also works with `ALPHAXIV_API_KEY` and then falls back to locally saved auth.
+`AlphaXivClient.from_saved_api_key()` loads `ALPHAXIV_API_KEY` first and then falls back to `~/.alphaxiv/api-key.json`.
 
 ## Docs
 

@@ -9,6 +9,7 @@ from alphaxiv._core import ClientCore
 from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.assistant import AssistantAPI
 from alphaxiv.cli.helpers import load_assistant_context, save_assistant_context
+from alphaxiv.exceptions import APIError
 from alphaxiv.types import (
     AssistantContext,
     AssistantMessage,
@@ -72,6 +73,8 @@ def test_normalize_model_label_and_passthrough() -> None:
     assistant = AssistantAPI(ClientCore(authorization="Bearer test-token"))
 
     assert assistant._normalize_model("Claude 4.6 Sonnet") == "claude-4.6-sonnet"
+    assert assistant._normalize_model("openai-gpt-5.4") == "gpt-5.4"
+    assert assistant._normalize_model("anthropic-claude-4.6-sonnet") == "claude-4.6-sonnet"
     assert assistant._normalize_model("my-new-model") == "my-new-model"
 
 
@@ -202,6 +205,32 @@ def test_assistant_set_model_cli(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Preferred assistant model set" in result.output
     assert "claude-4.6-sonnet" in result.output
+
+
+def test_assistant_model_cli(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(assistant_cli, "fetch_preferred_model", lambda: "claude-4.6-sonnet")
+
+    result = runner.invoke(cli, ["assistant", "model"])
+
+    assert result.exit_code == 0
+    assert "Preferred assistant model" in result.output
+    assert "claude-4.6-sonnet" in result.output
+
+
+def test_assistant_model_cli_surfaces_click_exception(monkeypatch) -> None:
+    runner = CliRunner()
+
+    def _raise(awaitable):
+        awaitable.close()
+        raise APIError("assistant model failed")
+
+    monkeypatch.setattr(assistant_cli, "run_async", _raise)
+
+    result = runner.invoke(cli, ["assistant", "model"])
+
+    assert result.exit_code != 0
+    assert "assistant model failed" in result.output
 
 
 def test_assistant_models_command_removed() -> None:

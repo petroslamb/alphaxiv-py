@@ -1,7 +1,6 @@
 """Public exports for alphaxiv-py."""
 
 from .assistant import AssistantAPI
-from .auth import SavedAuth
 from .client import AlphaXivClient
 from .exceptions import AlphaXivError, APIError, AuthRequiredError, ResolutionError
 from .types import (
@@ -12,8 +11,11 @@ from .types import (
     AssistantStreamEvent,
     Author,
     Citation,
+    CommentAuthor,
     ExploreFilterOptions,
     FeedCard,
+    Folder,
+    FolderPaper,
     HomepageSearchResults,
     ImplementationResource,
     Mention,
@@ -22,6 +24,7 @@ from .types import (
     OverviewSummary,
     OverviewTranslationStatus,
     Paper,
+    PaperComment,
     PaperFullText,
     PaperGroup,
     PaperMetrics,
@@ -33,6 +36,7 @@ from .types import (
     PodcastTranscriptLine,
     ResolvedPaper,
     SearchResult,
+    UrlMetadata,
 )
 
 __all__ = [
@@ -48,8 +52,11 @@ __all__ = [
     "AuthRequiredError",
     "Author",
     "Citation",
+    "CommentAuthor",
     "ExploreFilterOptions",
     "FeedCard",
+    "Folder",
+    "FolderPaper",
     "HomepageSearchResults",
     "ImplementationResource",
     "Mention",
@@ -59,6 +66,7 @@ __all__ = [
     "OverviewSummary",
     "PaperFullText",
     "Paper",
+    "PaperComment",
     "PaperGroup",
     "PaperMetrics",
     "PaperOverview",
@@ -69,8 +77,8 @@ __all__ = [
     "PodcastTranscriptLine",
     "ResolutionError",
     "ResolvedPaper",
-    "SavedAuth",
     "SearchResult",
+    "UrlMetadata",
 ]
 
 __version__ = "0.1.0"

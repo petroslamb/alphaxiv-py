@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from tests.fixtures import (
+    COMMENTS_PAYLOAD,
+    FOLDERS_PAYLOAD,
     FULL_TEXT_PAYLOAD,
     LEGACY_PAYLOAD,
     MENTIONS_PAYLOAD,
@@ -9,19 +11,23 @@ from tests.fixtures import (
     OVERVIEW_STATUS_PAYLOAD,
     SEARCH_PAYLOAD,
     TRANSCRIPT_PAYLOAD,
+    URL_METADATA_PAYLOAD,
 )
 
 from alphaxiv.types import (
     FeedCard,
+    Folder,
     Mention,
     OrganizationResult,
     OverviewStatus,
     Paper,
+    PaperComment,
     PaperFullText,
     PaperOverview,
     PaperTranscript,
     ResolvedPaper,
     SearchResult,
+    UrlMetadata,
 )
 
 
@@ -143,3 +149,28 @@ def test_mention_from_payload() -> None:
     mention = Mention.from_payload(MENTIONS_PAYLOAD["mentions"][0])
     assert mention.author_username == "why_lyon"
     assert mention.likes == 5
+
+
+def test_paper_comment_from_payload() -> None:
+    comment = PaperComment.from_payload(COMMENTS_PAYLOAD[0])
+    assert comment.title == "Interesting compression result"
+    assert comment.author is not None
+    assert comment.author.display_name == "Research Reader"
+    assert len(comment.responses) == 1
+    assert comment.responses[0].is_author is True
+
+
+def test_folder_from_payload() -> None:
+    folder = Folder.from_payload(FOLDERS_PAYLOAD[0])
+    assert folder.name == "Reading List"
+    assert folder.paper_count == 1
+    assert folder.papers[0].preferred_id == "2603.04379v1"
+
+
+def test_url_metadata_from_payload() -> None:
+    metadata = UrlMetadata.from_payload(
+        url="https://github.com/PKU-YuanGroup/Helios",
+        payload=URL_METADATA_PAYLOAD,
+    )
+    assert metadata.title == "PKU-YuanGroup/Helios"
+    assert metadata.site_name == "GitHub"

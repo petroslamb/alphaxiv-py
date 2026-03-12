@@ -1,24 +1,14 @@
-"""Session-like CLI commands for current paper context."""
+"""Saved paper and assistant context commands."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import click
 
-from ..auth import (
-    ALPHAXIV_API_KEY_ENV,
-    authenticate_with_api_key,
-    authenticate_with_browser,
-    clear_saved_auth,
-    ensure_saved_auth,
-    save_auth,
-)
-from ..paths import (
-    get_assistant_context_path,
-    get_auth_path,
-    get_browser_profile_path,
-    get_context_path,
-)
+from ..paths import get_assistant_context_path, get_context_path
 from ..types import ResolvedPaper
+from .grouped import WrappedHelpGroup
 from .helpers import (
     clear_assistant_context,
     clear_context,
@@ -27,10 +17,21 @@ from .helpers import (
     load_context,
     make_client,
     render_assistant_context_table,
-    render_auth_table,
     render_context_table,
     run_async,
+    save_assistant_context,
     save_context,
+)
+
+context = WrappedHelpGroup(
+    "context",
+    help=(
+        "Inspect or update the saved paper and assistant context.\n\n"
+        "Examples:\n"
+        "  alphaxiv context show\n"
+        "  alphaxiv context use paper 1706.03762\n"
+        "  alphaxiv context use assistant session-existing"
+    ),
 )
 
 
@@ -42,125 +43,151 @@ def resolve_paper_identifier(identifier: str) -> ResolvedPaper:
     return run_async(_resolve())
 
 
-def _saved_preferred_model(saved_auth) -> str | None:
-    preferences = saved_auth.user.get("preferences") if isinstance(saved_auth.user, dict) else None
-    if not isinstance(preferences, dict):
-        return None
-    base = preferences.get("base")
-    if not isinstance(base, dict):
-        return None
-    model = base.get("preferredLlmModel")
-    return model.strip() if isinstance(model, str) and model.strip() else None
+def hydrate_paper_context_title(resolved: ResolvedPaper) -> ResolvedPaper:
+    if resolved.title or not (resolved.canonical_id or resolved.versionless_id):
+        return resolved
 
+    identifier = resolved.canonical_id or resolved.versionless_id
+    if identifier is None:
+        return resolved
 
-def fetch_preferred_model(saved_auth) -> str | None:
-    async def _preferred() -> str:
+    async def _fetch_title() -> str | None:
         async with make_client() as client:
-            return await client.assistant.preferred_model(refresh=True)
+            paper = await client.papers.get(identifier)
+            title = paper.version.title.strip()
+            return title or None
 
     try:
-        return run_async(_preferred())
+        title = run_async(_fetch_title())
     except Exception:
-        return _saved_preferred_model(saved_auth)
+        return resolved
+
+    if not title:
+        return resolved
+
+    hydrated = replace(resolved, title=title)
+    save_context(hydrated)
+    return hydrated
 
 
-def register_session_commands(cli):
-    @cli.command("login")
-    @click.option(
-        "--api-key",
-        help="Save an explicit alphaXiv API key instead of opening the browser login flow.",
-    )
-    def login(api_key: str | None) -> None:
-        """Save alphaXiv authentication locally."""
-        if api_key:
-            try:
-                saved_auth = authenticate_with_api_key(api_key)
-            except Exception as exc:
-                raise click.ClickException(str(exc)) from exc
-        else:
-            console.print("[yellow]Opening browser for alphaXiv sign-in...[/yellow]")
-            console.print(f"[dim]Using persistent profile: {get_browser_profile_path()}[/dim]")
-            console.print()
-            console.print("[bold]Instructions[/bold]")
-            console.print(
-                "1. In the browser, use Continue with Google or any other alphaXiv sign-in path."
-            )
-            console.print("2. Wait until the alphaXiv session is fully loaded.")
-            console.print("3. Press ENTER back in the terminal to save the current bearer token.")
-            console.print()
-            try:
-                saved_auth = authenticate_with_browser()
-            except Exception as exc:
-                raise click.ClickException(str(exc)) from exc
+def _show_missing_paper_context() -> None:
+    console.print("[bold]Current Paper Context[/bold]")
+    console.print("[yellow]No current paper is set.[/yellow]")
+    console.print(f"[dim]Expected paper context file: {get_context_path()}[/dim]")
 
-        path = save_auth(saved_auth)
-        console.print(f"[green]Authentication saved:[/green] {path}")
-        if saved_auth.display_name or saved_auth.email:
-            console.print(
-                f"[dim]Logged in as {saved_auth.display_name or saved_auth.email}"
-                f"{f' <{saved_auth.email}>' if saved_auth.display_name and saved_auth.email else ''}[/dim]"
-            )
 
-    @cli.command("logout")
-    @click.option(
-        "--clear-browser-profile",
-        is_flag=True,
-        help="Also remove the saved Playwright browser profile under ALPHAXIV_HOME.",
-    )
-    def logout(clear_browser_profile: bool) -> None:
-        """Remove saved alphaXiv authentication."""
-        clear_saved_auth(clear_browser_profile=clear_browser_profile)
-        console.print("[green]Removed saved alphaXiv authentication.[/green]")
-        console.print(f"[dim]Auth file: {get_auth_path()}[/dim]")
-        if clear_browser_profile:
-            console.print(f"[dim]Browser profile removed: {get_browser_profile_path()}[/dim]")
+def _show_missing_assistant_context() -> None:
+    console.print("[bold]Current Assistant Context[/bold]")
+    console.print("[yellow]No current assistant chat is set.[/yellow]")
+    console.print(f"[dim]Expected assistant context file: {get_assistant_context_path()}[/dim]")
 
-    @cli.command("use")
-    @click.argument("paper_id")
-    def use_paper(paper_id: str) -> None:
-        """Set the current paper context."""
-        resolved = resolve_paper_identifier(paper_id)
-        path = save_context(resolved)
-        console.print(f"[green]Current paper set:[/green] {resolved.preferred_id}")
-        console.print(f"[dim]Context saved to {path}[/dim]")
 
-    @cli.command("status")
-    def status() -> None:
-        """Show saved auth and current paper context."""
-        saved_auth = ensure_saved_auth()
-        if saved_auth:
-            console.print(render_auth_table(saved_auth, fetch_preferred_model(saved_auth)))
-        else:
-            console.print("[yellow]Not logged in to alphaXiv.[/yellow]")
-            console.print(
-                f"[dim]Set {ALPHAXIV_API_KEY_ENV} or save auth to {get_auth_path()}[/dim]"
-            )
+def _show_paper_context() -> None:
+    resolved = load_context()
+    if not resolved:
+        _show_missing_paper_context()
+        return
+    console.print(render_context_table(hydrate_paper_context_title(resolved)))
 
-        resolved = load_context()
-        assistant_context = load_assistant_context()
-        if resolved:
-            console.print()
-            console.print(render_context_table(resolved))
-        else:
-            console.print()
-            console.print("[yellow]No current paper is set.[/yellow]")
-            console.print(f"[dim]Expected context file: {get_context_path()}[/dim]")
 
-        if assistant_context:
-            console.print()
-            console.print(render_assistant_context_table(assistant_context))
-        else:
-            console.print()
-            console.print("[yellow]No current assistant chat is set.[/yellow]")
-            console.print(
-                f"[dim]Expected assistant context file: {get_assistant_context_path()}[/dim]"
-            )
+def _show_assistant_context() -> None:
+    assistant_context = load_assistant_context()
+    if not assistant_context:
+        _show_missing_assistant_context()
+        return
+    console.print(render_assistant_context_table(assistant_context))
 
-    @cli.command("clear")
-    def clear() -> None:
-        """Clear the current paper context."""
-        clear_context()
+
+@context.group("show", cls=WrappedHelpGroup, invoke_without_command=True)
+@click.pass_context
+def show_group(ctx: click.Context) -> None:
+    """Show the saved paper context, assistant context, or both together."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _show_paper_context()
+    console.print()
+    _show_assistant_context()
+
+
+@show_group.command("paper")
+def show_paper_context() -> None:
+    """Show only the saved paper context."""
+    _show_paper_context()
+
+
+@show_group.command("assistant")
+def show_assistant_context() -> None:
+    """Show only the saved assistant context."""
+    _show_assistant_context()
+
+
+@context.group("use", cls=WrappedHelpGroup)
+def use_group() -> None:
+    """Set the saved current paper or assistant session context."""
+
+
+@use_group.command("paper")
+@click.argument("paper_id")
+def use_paper_context(paper_id: str) -> None:
+    """Resolve a paper identifier and save it as the current paper context."""
+    resolved = resolve_paper_identifier(paper_id)
+    path = save_context(resolved)
+    console.print(f"[green]Current paper set:[/green] {resolved.preferred_id}")
+    console.print(f"[dim]Paper context saved to {path}[/dim]")
+
+
+@use_group.command("assistant")
+@click.argument("session_id")
+def use_assistant_context(session_id: str) -> None:
+    """Save an assistant session id as the current assistant context."""
+    from .assistant import resolve_context_for_session
+
+    resolved = resolve_context_for_session(session_id)
+    path = save_assistant_context(resolved)
+    console.print(f"[green]Current assistant chat set:[/green] {resolved.session_id}")
+    console.print(f"[dim]Assistant context saved to {path}[/dim]")
+
+
+def _clear_paper_context() -> bool:
+    had_context = get_context_path().exists()
+    clear_context()
+    return had_context
+
+
+def _clear_assistant_chat_context() -> bool:
+    had_context = get_assistant_context_path().exists()
+    clear_assistant_context()
+    return had_context
+
+
+def _print_clear_result(*, cleared_paper: bool, cleared_assistant: bool) -> None:
+    if cleared_paper:
         console.print("[green]Cleared current paper context.[/green]")
-        if load_assistant_context():
-            clear_assistant_context()
-            console.print("[green]Cleared current assistant chat context.[/green]")
+    if cleared_assistant:
+        console.print("[green]Cleared current assistant chat context.[/green]")
+    if not cleared_paper and not cleared_assistant:
+        console.print("[yellow]No saved paper or assistant context was present.[/yellow]")
+
+
+@context.group("clear", cls=WrappedHelpGroup, invoke_without_command=True)
+@click.pass_context
+def clear_group(ctx: click.Context) -> None:
+    """Clear the saved paper context, assistant context, or both together."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _print_clear_result(
+        cleared_paper=_clear_paper_context(),
+        cleared_assistant=_clear_assistant_chat_context(),
+    )
+
+
+@clear_group.command("paper")
+def clear_paper_context() -> None:
+    """Clear only the saved paper context."""
+    _print_clear_result(cleared_paper=_clear_paper_context(), cleared_assistant=False)
+
+
+@clear_group.command("assistant")
+def clear_assistant_context_command() -> None:
+    """Clear only the saved assistant context."""
+    _print_clear_result(cleared_paper=False, cleared_assistant=_clear_assistant_chat_context())

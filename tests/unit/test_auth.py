@@ -1,116 +1,99 @@
 from __future__ import annotations
 
-import asyncio
-import base64
-import json
-from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from alphaxiv import auth
 from alphaxiv.auth import (
     ALPHAXIV_API_KEY_ENV,
     authenticate_with_api_key,
-    build_saved_auth,
-    clear_saved_auth,
-    ensure_saved_auth,
-    load_authorization,
-    load_saved_auth,
-    save_auth,
+    build_saved_api_key,
+    clear_saved_api_key,
+    legacy_saved_auth_exists,
+    load_api_key_authorization,
+    load_api_key_value,
+    load_saved_api_key,
+    resolve_api_key,
+    save_api_key,
 )
-from alphaxiv.paths import get_auth_path, get_browser_profile_path
+from alphaxiv.paths import get_api_key_path, get_legacy_auth_path
 
 
-def _make_jwt(expiry_timestamp: int) -> str:
-    header = {"alg": "none", "typ": "JWT"}
-    payload = {"exp": expiry_timestamp}
-
-    def _encode(part: Mapping[str, object]) -> str:
-        encoded = base64.urlsafe_b64encode(json.dumps(part).encode("utf-8")).decode("utf-8")
-        return encoded.rstrip("=")
-
-    return f"{_encode(header)}.{_encode(payload)}.signature"
-
-
-def test_build_saved_auth_decodes_jwt_expiry() -> None:
-    saved_auth = build_saved_auth(
-        _make_jwt(1_900_000_000),
+def test_build_saved_api_key_normalizes_prefix_and_exposes_metadata() -> None:
+    saved_api_key = build_saved_api_key(
+        "Bearer axv1_8f92dff095b1_edac2199",
         user={"name": "Petros", "email": "petros@example.com"},
+        saved_at=datetime(2026, 3, 12, 9, 0, tzinfo=UTC),
     )
 
-    assert saved_auth.display_name == "Petros"
-    assert saved_auth.email == "petros@example.com"
-    assert saved_auth.authorization_header.startswith("Bearer ")
-    assert saved_auth.expires_at == datetime.fromtimestamp(1_900_000_000, tz=UTC)
+    assert saved_api_key.api_key == "axv1_8f92dff095b1_edac2199"
+    assert saved_api_key.authorization_header == "Bearer axv1_8f92dff095b1_edac2199"
+    assert saved_api_key.key_prefix == "axv1_8f92dff095b1"
+    assert saved_api_key.display_name == "Petros"
+    assert saved_api_key.email == "petros@example.com"
 
 
-def test_save_and_load_auth(monkeypatch, tmp_path) -> None:
+def test_save_and_load_api_key(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    saved_auth = build_saved_auth(
-        "test-token",
+    saved_api_key = build_saved_api_key(
+        "axv1_test-token",
         user={"username": "petros", "email": "petros@example.com"},
+        saved_at=datetime(2026, 3, 12, 9, 0, tzinfo=UTC),
     )
 
-    save_auth(saved_auth)
-    loaded = load_saved_auth()
+    save_api_key(saved_api_key)
+    loaded = load_saved_api_key()
 
     assert loaded is not None
-    assert loaded.access_token == "test-token"
+    assert loaded.api_key == "axv1_test-token"
     assert loaded.display_name == "petros"
-    assert load_authorization() == "Bearer test-token"
-    assert get_auth_path().exists()
+    assert loaded.saved_at == datetime(2026, 3, 12, 9, 0, tzinfo=UTC)
+    assert load_api_key_authorization() == "Bearer axv1_test-token"
+    assert get_api_key_path().exists()
 
 
-def test_clear_saved_auth_removes_browser_profile(monkeypatch, tmp_path) -> None:
+def test_clear_saved_api_key_removes_legacy_auth(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    save_auth(build_saved_auth("test-token"))
-    browser_profile = get_browser_profile_path()
-    browser_profile.mkdir(parents=True, exist_ok=True)
-    (browser_profile / "marker.txt").write_text("profile")
+    save_api_key(build_saved_api_key("axv1_test-token"))
+    legacy_auth_path = get_legacy_auth_path()
+    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
 
-    clear_saved_auth(clear_browser_profile=True)
+    clear_saved_api_key(clear_legacy=True)
 
-    assert not get_auth_path().exists()
-    assert not browser_profile.exists()
+    assert not get_api_key_path().exists()
+    assert not legacy_auth_path.exists()
 
 
-def test_ensure_saved_auth_returns_expired_saved_auth_without_refresh(
-    monkeypatch, tmp_path
-) -> None:
+def test_resolve_api_key_uses_env_first(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    expired_auth = build_saved_auth(
-        _make_jwt(1_700_000_000),
-        user={"email": "stale@example.com"},
-    )
-    save_auth(expired_auth)
-
-    active_auth = ensure_saved_auth()
-
-    assert active_auth is not None
-    assert active_auth.email == "stale@example.com"
-    assert active_auth.is_expired
-
-
-def test_load_authorization_uses_env_api_key_first(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    save_auth(build_saved_auth("saved-token"))
+    save_api_key(build_saved_api_key("axv1_saved-token"))
     monkeypatch.setenv(ALPHAXIV_API_KEY_ENV, "axv1_env-token")
 
-    async def _load() -> str | None:
-        return load_authorization()
+    saved_api_key = resolve_api_key()
 
-    authorization = asyncio.run(_load())
+    assert saved_api_key is not None
+    assert saved_api_key.api_key == "axv1_env-token"
+    assert saved_api_key.source == "env"
+    assert load_api_key_value() == "axv1_env-token"
+    assert load_api_key_authorization() == "Bearer axv1_env-token"
 
-    assert authorization == "Bearer axv1_env-token"
+
+def test_legacy_saved_auth_exists(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    legacy_auth_path = get_legacy_auth_path()
+    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
+
+    assert legacy_saved_auth_exists()
 
 
-def test_authenticate_with_api_key_validates_and_marks_kind(monkeypatch) -> None:
+def test_authenticate_with_api_key_validates_and_returns_saved_api_key(monkeypatch) -> None:
     monkeypatch.setattr(
         auth, "fetch_current_user", lambda _token, timeout=30.0: {"email": "petros@example.com"}
     )
 
-    saved_auth = authenticate_with_api_key("Bearer axv1_test-token")
+    saved_api_key = authenticate_with_api_key("Bearer axv1_test-token")
 
-    assert saved_auth.access_token == "axv1_test-token"
-    assert saved_auth.kind == "api_key"
-    assert saved_auth.source == "saved"
-    assert saved_auth.email == "petros@example.com"
+    assert saved_api_key.api_key == "axv1_test-token"
+    assert saved_api_key.source == "saved"
+    assert saved_api_key.email == "petros@example.com"

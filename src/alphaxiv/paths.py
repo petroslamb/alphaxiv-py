@@ -26,14 +26,14 @@ def get_assistant_context_path() -> Path:
     return get_home_path() / "assistant-context.json"
 
 
-def get_auth_path() -> Path:
-    """Return the saved authentication file path."""
+def get_api_key_path() -> Path:
+    """Return the saved API key file path."""
+    return get_home_path() / "api-key.json"
+
+
+def get_legacy_auth_path() -> Path:
+    """Return the legacy saved auth.json path from older browser-token versions."""
     return get_home_path() / "auth.json"
-
-
-def get_browser_profile_path() -> Path:
-    """Return the Playwright browser profile directory."""
-    return get_home_path() / "browser-profile"
 
 
 def ensure_home_path() -> Path:

@@ -28,9 +28,6 @@ Documentation = "https://github.com/petroslamb/alphaxiv-py#readme"
 Issues = "https://github.com/petroslamb/alphaxiv-py/issues"
 
 [project.optional-dependencies]
-browser = [
-    "playwright>=1.52.0",
-]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
@@ -55,7 +52,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "--ignore=tests/e2e"
 markers = [
-    "e2e: live tests against public alphaXiv endpoints (run with ALPHAXIV_RUN_E2E=1)",
+    "e2e: live alphaXiv smoke tests for public and authenticated CLI/SDK flows",
 ]
 
 [tool.coverage.run]

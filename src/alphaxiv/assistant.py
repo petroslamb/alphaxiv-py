@@ -10,22 +10,31 @@ from typing import Any, Literal
 
 from ._core import BASE_API_URL, ClientCore
 from ._papers import PapersAPI
-from .exceptions import AlphaXivError, AuthRequiredError, ResolutionError
+from .exceptions import APIError, AlphaXivError, AuthRequiredError, ResolutionError
 from .types import (
     AssistantMessage,
     AssistantRun,
     AssistantSession,
     AssistantStreamEvent,
     ResolvedPaper,
+    UrlMetadata,
 )
 
 ASSISTANT_AUTH_REQUIRED_MESSAGE = (
-    "alphaXiv assistant endpoints require a saved or explicit Authorization header. "
-    "Run 'alphaxiv login' first, or pass authorization into AlphaXivClient(...)."
+    "alphaXiv assistant endpoints require an API key. Set ALPHAXIV_API_KEY, run "
+    "'alphaxiv auth set-api-key', or pass api_key into AlphaXivClient(...)."
 )
 
 ASSISTANT_DEFAULT_MODEL = "claude-4.6-sonnet"
 ASSISTANT_WEB_SEARCH_VALUES = {"off", "full"}
+ASSISTANT_MODEL_PREFIX_REWRITES = {
+    "openai-gpt-": "gpt-",
+    "anthropic-claude-": "claude-",
+    "google-gemini-": "gemini-",
+    "moonshot-kimi-": "kimi-",
+    "zhipu-glm-": "glm-",
+    "alibaba-qwen-": "qwen-",
+}
 
 
 class AssistantAPI:
@@ -45,7 +54,7 @@ class AssistantAPI:
             self._preferred_model = ASSISTANT_DEFAULT_MODEL
             return self._preferred_model
         preferred = self._extract_preferred_model(payload)
-        self._preferred_model = self._normalize_model(preferred or ASSISTANT_DEFAULT_MODEL)
+        self._preferred_model = (preferred or ASSISTANT_DEFAULT_MODEL).strip()
         return self._preferred_model
 
     async def set_preferred_model(self, model: str) -> str:
@@ -80,6 +89,16 @@ class AssistantAPI:
         if not isinstance(payload, list):
             raise AlphaXivError(f"Unexpected assistant history payload for '{session_id}'.")
         return [AssistantMessage.from_payload(item) for item in payload if isinstance(item, dict)]
+
+    async def url_metadata(self, url: str) -> UrlMetadata:
+        self._require_auth()
+        payload = await self._core.get_json(
+            f"{BASE_API_URL}/assistant/v2/url-metadata",
+            params={"url": url},
+        )
+        if not isinstance(payload, dict):
+            raise AlphaXivError(f"Unexpected assistant URL metadata payload for '{url}'.")
+        return UrlMetadata.from_payload(url=url, payload=payload)
 
     async def stream(
         self,
@@ -225,7 +244,11 @@ class AssistantAPI:
         parent_message_id = None
         if session_id:
             parent_message_id = await self._latest_parent_message_id(session_id)
-        resolved_model = self._normalize_model(model) if model else await self.preferred_model()
+        resolved_model = (
+            self._normalize_model(model)
+            if model
+            else self._normalize_model(await self.preferred_model())
+        )
 
         return {
             "message": message,
@@ -260,7 +283,11 @@ class AssistantAPI:
         cleaned = " ".join(model.split()).strip()
         if not cleaned:
             raise AlphaXivError("Assistant model cannot be empty.")
-        return cleaned.lower().replace(" ", "-")
+        normalized = cleaned.lower().replace(" ", "-")
+        for prefix, replacement in ASSISTANT_MODEL_PREFIX_REWRITES.items():
+            if normalized.startswith(prefix):
+                return f"{replacement}{normalized[len(prefix):]}"
+        return normalized
 
     async def _latest_parent_message_id(self, session_id: str) -> str | None:
         messages = await self.history(session_id)
@@ -314,27 +341,30 @@ class AssistantAPI:
         return None
 
     async def _stream_chat(self, payload: dict[str, Any]) -> AsyncIterator[AssistantStreamEvent]:
-        async with self._core.stream_request(
-            "POST",
-            f"{BASE_API_URL}/assistant/v2/chat",
-            json_data=payload,
-        ) as response:
-            buffered_lines: list[str] = []
-            async for line in response.aiter_lines():
-                if not line:
+        try:
+            async with self._core.stream_request(
+                "POST",
+                f"{BASE_API_URL}/assistant/v2/chat",
+                json_data=payload,
+            ) as response:
+                buffered_lines: list[str] = []
+                async for line in response.aiter_lines():
+                    if not line:
+                        event = self._parse_sse_event(buffered_lines)
+                        buffered_lines.clear()
+                        if event is not None:
+                            yield event
+                        continue
+                    if line.startswith(":"):
+                        continue
+                    buffered_lines.append(line)
+
+                if buffered_lines:
                     event = self._parse_sse_event(buffered_lines)
-                    buffered_lines.clear()
                     if event is not None:
                         yield event
-                    continue
-                if line.startswith(":"):
-                    continue
-                buffered_lines.append(line)
-
-            if buffered_lines:
-                event = self._parse_sse_event(buffered_lines)
-                if event is not None:
-                    yield event
+        except APIError as exc:
+            raise self._rewrite_chat_api_error(exc, payload) from exc
 
     def _parse_sse_event(self, lines: builtins.list[str]) -> AssistantStreamEvent | None:
         if not lines:
@@ -356,3 +386,30 @@ class AssistantAPI:
                 {"type": "raw", "content": json.dumps(payload), "kind": None, "index": None}
             )
         return AssistantStreamEvent.from_payload(payload)
+
+    def _rewrite_chat_api_error(self, exc: APIError, payload: dict[str, Any]) -> APIError:
+        if not self._is_model_schema_error(exc):
+            return exc
+
+        model = str(payload.get("model") or "unknown")
+        message = (
+            f"alphaXiv rejected the assistant request for model '{model}'. "
+            "This usually means the selected model id is not accepted by the chat endpoint. "
+            "Try a UI label like 'GPT 5.4' or 'Claude 4.6 Sonnet', or update the saved "
+            "preferred model before retrying."
+        )
+        return APIError(
+            message,
+            status_code=exc.status_code,
+            url=exc.url,
+            response_text=exc.response_text,
+        )
+
+    def _is_model_schema_error(self, exc: APIError) -> bool:
+        if not exc.url or "/assistant/v2/chat" not in exc.url:
+            return False
+        message = str(exc).lower()
+        response_text = (exc.response_text or "").lower()
+        return "request does not match schema" in message or "request does not match schema" in (
+            response_text
+        )

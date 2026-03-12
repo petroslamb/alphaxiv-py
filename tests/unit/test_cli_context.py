@@ -6,154 +6,265 @@ from datetime import UTC, datetime
 from click.testing import CliRunner
 
 from alphaxiv.alphaxiv_cli import cli
-from alphaxiv.auth import SavedAuth, load_saved_auth, save_auth
-from alphaxiv.paths import get_auth_path, get_browser_profile_path
+from alphaxiv.auth import SavedApiKey, build_saved_api_key, load_saved_api_key, save_api_key
+from alphaxiv.cli.helpers import (
+    load_assistant_context,
+    load_context,
+    save_assistant_context,
+    save_context,
+)
+from alphaxiv.paths import (
+    get_api_key_path,
+    get_assistant_context_path,
+    get_context_path,
+    get_legacy_auth_path,
+)
 from alphaxiv.types import (
-    FeedCard,
-    HomepageSearchResults,
-    OrganizationResult,
+    AssistantContext,
     OverviewStatus,
     OverviewSummary,
     OverviewTranslationStatus,
+    Paper,
     PaperFullText,
+    PaperGroup,
     PaperOverview,
     PaperTextPage,
     PaperTranscript,
+    PaperVersion,
     PodcastTranscriptLine,
     ResolvedPaper,
-    SearchResult,
 )
 
-explore_cli = importlib.import_module("alphaxiv.cli.explore")
+assistant_cli = importlib.import_module("alphaxiv.cli.assistant")
+auth_cli = importlib.import_module("alphaxiv.cli.auth")
+context_cli = importlib.import_module("alphaxiv.cli.session")
 paper_cli = importlib.import_module("alphaxiv.cli.paper")
-session_cli = importlib.import_module("alphaxiv.cli.session")
 
 
-def test_login_command_saves_auth(monkeypatch, tmp_path) -> None:
-    runner = CliRunner()
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    saved_auth = SavedAuth(
-        access_token="test-token",
-        created_at=datetime(2026, 3, 11, tzinfo=UTC),
-        expires_at=None,
-        user={"name": "Petros", "email": "petros@example.com"},
-    )
-    monkeypatch.setattr(session_cli, "authenticate_with_browser", lambda: saved_auth)
-
-    result = runner.invoke(cli, ["login"])
-
-    assert result.exit_code == 0
-    assert "Authentication saved" in result.output
-    loaded = load_saved_auth()
-    assert loaded is not None
-    assert loaded.email == "petros@example.com"
-
-
-def test_login_command_saves_api_key(monkeypatch, tmp_path) -> None:
-    runner = CliRunner()
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    saved_auth = SavedAuth(
-        access_token="axv1_test-token",
-        created_at=datetime(2026, 3, 11, tzinfo=UTC),
-        expires_at=None,
-        kind="api_key",
-        source="saved",
-        user={"name": "Petros", "email": "petros@example.com"},
-    )
-    monkeypatch.setattr(session_cli, "authenticate_with_api_key", lambda _api_key: saved_auth)
-
-    result = runner.invoke(cli, ["login", "--api-key", "axv1_test-token"])
-
-    assert result.exit_code == 0
-    assert "Authentication saved" in result.output
-    loaded = load_saved_auth()
-    assert loaded is not None
-    assert loaded.access_token == "axv1_test-token"
-    assert loaded.kind == "api_key"
-
-
-def test_logout_command_clears_saved_auth(monkeypatch, tmp_path) -> None:
-    runner = CliRunner()
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    save_auth(
-        SavedAuth(
-            access_token="test-token",
-            created_at=datetime(2026, 3, 11, tzinfo=UTC),
-            expires_at=None,
-            user={"email": "petros@example.com"},
-        )
-    )
-    browser_profile = get_browser_profile_path()
-    browser_profile.mkdir(parents=True, exist_ok=True)
-    (browser_profile / "marker.txt").write_text("profile")
-
-    result = runner.invoke(cli, ["logout", "--clear-browser-profile"])
-
-    assert result.exit_code == 0
-    assert "Removed saved alphaXiv authentication" in result.output
-    assert not get_auth_path().exists()
-    assert not browser_profile.exists()
-
-
-def test_use_and_status(monkeypatch, tmp_path) -> None:
-    runner = CliRunner()
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    resolved = ResolvedPaper(
-        input_id="2603.04379",
+def _resolved(identifier: str, *, title: str | None = None) -> ResolvedPaper:
+    return ResolvedPaper(
+        input_id=identifier,
         versionless_id="2603.04379",
         canonical_id="2603.04379v1",
         version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
         group_id="019cbc05-f11c-75c7-a13b-b028107d6a76",
+        title=title,
     )
-    monkeypatch.setattr(session_cli, "resolve_paper_identifier", lambda _: resolved)
 
-    result = runner.invoke(cli, ["use", "2603.04379"])
+
+def test_auth_set_api_key_command_saves_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    saved_auth = SavedApiKey(
+        api_key="axv1_test-token",
+        saved_at=datetime(2026, 3, 11, tzinfo=UTC),
+        user={"name": "Petros", "email": "petros@example.com"},
+    )
+    monkeypatch.setattr(auth_cli, "authenticate_with_api_key", lambda _api_key: saved_auth)
+
+    result = runner.invoke(cli, ["auth", "set-api-key", "--api-key", "axv1_test-token"])
+
+    assert result.exit_code == 0
+    assert "API key saved" in result.output
+    loaded = load_saved_api_key()
+    assert loaded is not None
+    assert loaded.email == "petros@example.com"
+
+
+def test_auth_set_api_key_prompts_when_flag_missing(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    saved_auth = SavedApiKey(
+        api_key="axv1_test-token",
+        saved_at=datetime(2026, 3, 11, tzinfo=UTC),
+        user={"name": "Petros", "email": "petros@example.com"},
+    )
+    monkeypatch.setattr(auth_cli, "authenticate_with_api_key", lambda _api_key: saved_auth)
+
+    result = runner.invoke(cli, ["auth", "set-api-key"], input="axv1_test-token\n")
+
+    assert result.exit_code == 0
+    assert "alphaXiv API key" in result.output
+    assert "API key saved" in result.output
+    loaded = load_saved_api_key()
+    assert loaded is not None
+    assert loaded.api_key == "axv1_test-token"
+
+
+def test_auth_clear_command_removes_saved_and_legacy_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_api_key(
+        build_saved_api_key(
+            "axv1_test-token",
+            user={"email": "petros@example.com"},
+            saved_at=datetime(2026, 3, 11, tzinfo=UTC),
+        )
+    )
+    legacy_auth_path = get_legacy_auth_path()
+    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
+
+    result = runner.invoke(cli, ["auth", "clear"])
+
+    assert result.exit_code == 0
+    assert "Removed local alphaXiv auth files" in result.output
+    assert not get_api_key_path().exists()
+    assert not legacy_auth_path.exists()
+
+
+def test_auth_status_shows_saved_api_key_without_model(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_api_key(
+        build_saved_api_key(
+            "axv1_test-token",
+            user={"name": "Petros", "email": "petros@example.com"},
+            saved_at=datetime(2026, 3, 11, tzinfo=UTC),
+        )
+    )
+
+    status = runner.invoke(cli, ["auth", "status"])
+
+    assert status.exit_code == 0
+    assert "alphaXiv API Key" in status.output
+    assert "petros@example.com" in status.output
+    assert "saved" in status.output
+    assert "axv1_test-token" not in status.output
+    assert "axv1_test-to" in status.output
+    assert "Preferred Model" not in status.output
+
+
+def test_auth_status_warns_about_legacy_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    legacy_auth_path = get_legacy_auth_path()
+    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
+
+    status = runner.invoke(cli, ["auth", "status"])
+
+    assert status.exit_code == 0
+    assert "Legacy auth.json found but ignored" in status.output
+
+
+def test_context_use_paper_and_show(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    resolved = _resolved("2603.04379", title="Helios: Real Real-Time Long Video Generation Model")
+    monkeypatch.setattr(context_cli, "resolve_paper_identifier", lambda _: resolved)
+
+    result = runner.invoke(cli, ["context", "use", "paper", "2603.04379"])
+
     assert result.exit_code == 0
     assert "Current paper set" in result.output
 
-    status = runner.invoke(cli, ["status"])
+    status = runner.invoke(cli, ["context", "show"])
     assert status.exit_code == 0
-    assert "Not logged in to alphaXiv" in status.output
+    assert "Current Paper Context" in status.output
+    assert "Helios: Real Real-Time Long Video Generation Model" in status.output
     assert "2603.04379v1" in status.output
+    assert "Current Assistant Context" in status.output
+    assert "No current assistant chat is set" in status.output
 
 
-def test_status_shows_saved_auth(monkeypatch, tmp_path) -> None:
+def test_context_show_paper_hydrates_missing_title(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    save_auth(
-        SavedAuth(
-            access_token="test-token",
-            created_at=datetime(2026, 3, 11, tzinfo=UTC),
-            expires_at=None,
-            user={"name": "Petros", "email": "petros@example.com"},
-        )
+    save_context(_resolved("2603.04379", title=None))
+
+    def _run_async(awaitable):
+        awaitable.close()
+        return "Helios"
+
+    monkeypatch.setattr(context_cli, "run_async", _run_async)
+
+    result = runner.invoke(cli, ["context", "show", "paper"])
+
+    assert result.exit_code == 0
+    assert "Helios" in result.output
+    loaded = load_context()
+    assert loaded is not None
+    assert loaded.title == "Helios"
+
+
+def test_context_use_assistant_saves_context(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    assistant_context = AssistantContext(
+        session_id="session-existing",
+        variant="paper",
+        paper=_resolved("2603.04379", title="Helios"),
+        newest_message_at=datetime(2026, 3, 12, 8, 0, tzinfo=UTC),
+        title="Helios follow-up",
     )
     monkeypatch.setattr(
-        session_cli, "fetch_preferred_model", lambda _saved_auth: "claude-4.6-sonnet"
+        assistant_cli, "resolve_context_for_session", lambda _session_id: assistant_context
     )
 
-    status = runner.invoke(cli, ["status"])
+    result = runner.invoke(cli, ["context", "use", "assistant", "session-existing"])
 
-    assert status.exit_code == 0
-    assert "alphaXiv Authentication" in status.output
-    assert "petros@example.com" in status.output
-    assert "claude-4.6-sonnet" in status.output
-    assert "saved" in status.output
-    assert "bearer token" in status.output
+    assert result.exit_code == 0
+    assert "Current assistant chat set" in result.output
+    loaded = load_assistant_context()
+    assert loaded == assistant_context
+
+
+def test_context_clear_targets_right_files(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_context(_resolved("2603.04379", title="Helios"))
+    save_assistant_context(
+        AssistantContext(
+            session_id="session-existing",
+            variant="homepage",
+            paper=None,
+            newest_message_at=None,
+            title="Earlier chat",
+        )
+    )
+
+    paper_clear = runner.invoke(cli, ["context", "clear", "paper"])
+    assert paper_clear.exit_code == 0
+    assert "Cleared current paper context" in paper_clear.output
+    assert not get_context_path().exists()
+    assert get_assistant_context_path().exists()
+
+    assistant_clear = runner.invoke(cli, ["context", "clear", "assistant"])
+    assert assistant_clear.exit_code == 0
+    assert "Cleared current assistant chat context" in assistant_clear.output
+    assert not get_assistant_context_path().exists()
+
+
+def test_context_clear_without_target_clears_both(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_context(_resolved("2603.04379", title="Helios"))
+    save_assistant_context(
+        AssistantContext(
+            session_id="session-existing",
+            variant="homepage",
+            paper=None,
+            newest_message_at=None,
+            title="Earlier chat",
+        )
+    )
+
+    result = runner.invoke(cli, ["context", "clear"])
+
+    assert result.exit_code == 0
+    assert "Cleared current paper context" in result.output
+    assert "Cleared current assistant chat context" in result.output
+    assert not get_context_path().exists()
+    assert not get_assistant_context_path().exists()
 
 
 def test_overview_uses_current_context(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    resolved = ResolvedPaper(
-        input_id="2603.04379",
-        versionless_id="2603.04379",
-        canonical_id="2603.04379v1",
-        version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
-        group_id="019cbc05-f11c-75c7-a13b-b028107d6a76",
-    )
-    monkeypatch.setattr(session_cli, "resolve_paper_identifier", lambda _: resolved)
-    runner.invoke(cli, ["use", "2603.04379"])
+    resolved = _resolved("2603.04379", title="Helios")
+    monkeypatch.setattr(context_cli, "resolve_paper_identifier", lambda _: resolved)
+    runner.invoke(cli, ["context", "use", "paper", "2603.04379"])
 
     overview = PaperOverview(
         version_id=resolved.version_id or "",
@@ -175,31 +286,10 @@ def test_overview_uses_current_context(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(paper_cli, "fetch_overview", lambda _identifier, language="en": overview)
 
-    result = runner.invoke(cli, ["overview"])
+    result = runner.invoke(cli, ["paper", "overview"])
     assert result.exit_code == 0
     assert "Helios" in result.output
     assert "Fast video generation" in result.output
-
-
-def test_overview_machine_mode(monkeypatch) -> None:
-    runner = CliRunner()
-    overview = PaperOverview(
-        version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
-        language="en",
-        title="Helios",
-        abstract="We introduce Helios.",
-        summary=None,
-        overview_markdown="## Research Paper Analysis\n\nMachine readable body",
-        intermediate_report=None,
-        citations=[],
-        raw={},
-    )
-    monkeypatch.setattr(paper_cli, "fetch_overview", lambda _identifier, language="en": overview)
-
-    result = runner.invoke(cli, ["overview", "2603.04379", "--machine"])
-    assert result.exit_code == 0
-    assert "Machine readable body" in result.output
-    assert "Summary" not in result.output
 
 
 def test_overview_status_command(monkeypatch) -> None:
@@ -222,25 +312,113 @@ def test_overview_status_command(monkeypatch) -> None:
     )
     monkeypatch.setattr(paper_cli, "fetch_overview_status", lambda _identifier: status)
 
-    result = runner.invoke(cli, ["overview-status", "2603.04379"])
+    result = runner.invoke(cli, ["paper", "overview-status", "2603.04379"])
     assert result.exit_code == 0
     assert "Overview Status" in result.output
     assert "done" in result.output
     assert "en" in result.output
 
 
+def test_paper_abstract_uses_current_context(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    resolved = _resolved("2603.04379", title="Helios: Real Real-Time Long Video Generation Model")
+    monkeypatch.setattr(context_cli, "resolve_paper_identifier", lambda _: resolved)
+    runner.invoke(cli, ["context", "use", "paper", "2603.04379"])
+
+    paper = Paper(
+        resolved=resolved,
+        version=PaperVersion(
+            id=resolved.version_id or "",
+            version_label="v1",
+            version_order=1,
+            title="Helios: Real Real-Time Long Video Generation Model",
+            abstract="We introduce Helios.",
+            publication_date=None,
+            license_url=None,
+            created_at=None,
+            updated_at=None,
+            is_hidden=False,
+            image_url=None,
+            universal_paper_id="2603.04379",
+            raw={},
+        ),
+        group=PaperGroup(
+            id=resolved.group_id or "",
+            universal_paper_id="2603.04379",
+            title="Helios: Real Real-Time Long Video Generation Model",
+            created_at=None,
+            updated_at=None,
+            topics=[],
+            metrics=None,
+            podcast_path=None,
+            source_name=None,
+            source_url=None,
+            is_hidden=False,
+            first_publication_date=None,
+            variant=None,
+            citation=None,
+            resources=[],
+            raw={},
+        ),
+        authors=[],
+        verified_authors=[],
+        pdf_url=None,
+        implementation=None,
+        marimo_implementation=None,
+        organization_info=[],
+        comments=[],
+        raw={},
+    )
+    monkeypatch.setattr(paper_cli, "fetch_paper", lambda _identifier: paper)
+
+    result = runner.invoke(cli, ["paper", "abstract"])
+    assert result.exit_code == 0
+    assert "Helios: Real Real-Time Long Video Generation Model" in result.output
+    assert "We introduce Helios." in result.output
+
+
+def test_paper_summary_uses_current_context(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    resolved = _resolved("2603.04379", title="Helios")
+    monkeypatch.setattr(context_cli, "resolve_paper_identifier", lambda _: resolved)
+    runner.invoke(cli, ["context", "use", "paper", "2603.04379"])
+
+    overview = PaperOverview(
+        version_id=resolved.version_id or "",
+        language="en",
+        title="Helios",
+        abstract="We introduce Helios.",
+        summary=OverviewSummary(
+            summary="Fast video generation",
+            original_problem=["Long videos drift."],
+            solution=["Unified History Injection."],
+            key_insights=["Relative RoPE stabilizes long contexts."],
+            results=["19.53 FPS on H100."],
+            raw={"summary": "Fast video generation"},
+        ),
+        overview_markdown="## Problem",
+        intermediate_report=None,
+        citations=[],
+        raw={},
+    )
+    monkeypatch.setattr(paper_cli, "fetch_overview", lambda _identifier, language="en": overview)
+
+    result = runner.invoke(cli, ["paper", "summary"])
+    assert result.exit_code == 0
+    assert "Fast video generation" in result.output
+    assert "Original Problem" in result.output
+    assert "Solution" in result.output
+    assert "Results" in result.output
+
+
 def test_paper_text_uses_current_context(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    resolved = ResolvedPaper(
-        input_id="2603.04379",
-        versionless_id="2603.04379",
-        canonical_id="2603.04379v1",
-        version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
-        group_id="019cbc05-f11c-75c7-a13b-b028107d6a76",
-    )
-    monkeypatch.setattr(session_cli, "resolve_paper_identifier", lambda _: resolved)
-    runner.invoke(cli, ["use", "2603.04379"])
+    resolved = _resolved("2603.04379")
+    monkeypatch.setattr(context_cli, "resolve_paper_identifier", lambda _: resolved)
+    runner.invoke(cli, ["context", "use", "paper", "2603.04379"])
 
     full_text = PaperFullText(
         resolved=resolved,
@@ -267,20 +445,14 @@ def test_resources_bibtex_command(monkeypatch) -> None:
         lambda _identifier: "@article{helios,\n  title={Helios}\n}",
     )
 
-    result = runner.invoke(cli, ["resources", "2603.04379", "--bibtex"])
+    result = runner.invoke(cli, ["paper", "resources", "2603.04379", "--bibtex"])
     assert result.exit_code == 0
     assert "@article{helios" in result.output
 
 
 def test_resources_transcript_command(monkeypatch) -> None:
     runner = CliRunner()
-    resolved = ResolvedPaper(
-        input_id="2603.04379",
-        versionless_id="2603.04379",
-        canonical_id="2603.04379v1",
-        version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
-        group_id="019cbc05-f11c-75c7-a13b-b028107d6a76",
-    )
+    resolved = _resolved("2603.04379")
     transcript = PaperTranscript(
         resolved=resolved,
         transcript_url="https://paper-podcasts.alphaxiv.org/019cbc05-f11c-75c7-a13b-b028107d6a76/transcript.json",
@@ -295,108 +467,8 @@ def test_resources_transcript_command(monkeypatch) -> None:
     )
     monkeypatch.setattr(paper_cli, "fetch_transcript", lambda _identifier: transcript)
 
-    result = runner.invoke(cli, ["resources", "2603.04379", "--transcript"])
+    result = runner.invoke(cli, ["paper", "resources", "2603.04379", "--transcript"])
     assert result.exit_code == 0
     assert "Audio Transcript" in result.output
     assert "John:" in result.output
     assert "Helios summary" in result.output
-
-
-def test_search_shows_topics_and_organizations(monkeypatch) -> None:
-    runner = CliRunner()
-    results = HomepageSearchResults(
-        query="reinforcement learning",
-        papers=[],
-        organizations=[
-            OrganizationResult(id="org-mit", name="MIT", image=None, slug="mit", raw={})
-        ],
-        topics=["deep-reinforcement-learning"],
-        raw={},
-    )
-    monkeypatch.setattr(explore_cli, "fetch_homepage_search", lambda _query: results)
-
-    result = runner.invoke(cli, ["search", "reinforcement learning"])
-    assert result.exit_code == 0
-    assert "Suggested Topics" in result.output
-    assert "deep-reinforcement-learning" in result.output
-    assert "MIT" in result.output
-
-
-def test_feed_list_renders_cards(monkeypatch) -> None:
-    runner = CliRunner()
-    cards = [
-        FeedCard(
-            group_id="group-helios",
-            paper_id="2603.04379",
-            canonical_id="2603.04379v1",
-            version_id="version-helios",
-            title="Helios",
-            abstract="We introduce Helios.",
-            summary="Helios summary",
-            result_highlights=["19.53 FPS"],
-            publication_date=None,
-            updated_at=None,
-            topics=["computer-science", "generative-models"],
-            organizations=[],
-            authors=["Shenghai Yuan"],
-            image_url=None,
-            upvotes=107,
-            total_votes=39,
-            x_likes=0,
-            visits=2974,
-            visits_last_7_days=2974,
-            github_stars=235,
-            github_url="https://github.com/PKU-YuanGroup/Helios",
-            raw={},
-        )
-    ]
-    monkeypatch.setattr(explore_cli, "fetch_feed_cards", lambda **_kwargs: cards)
-
-    result = runner.invoke(cli, ["feed", "list", "--sort", "hot", "--limit", "1"])
-    assert result.exit_code == 0
-    assert "alphaXiv Feed" in result.output
-    assert "2603.04379" in result.output
-    assert "107" in result.output
-
-
-def test_search_papers_command(monkeypatch) -> None:
-    runner = CliRunner()
-    results = [
-        SearchResult(
-            link="/abs/2603.04379",
-            paper_id="2603.04379",
-            title="Helios",
-            snippet="Fast video generation",
-            raw={},
-        )
-    ]
-    monkeypatch.setattr(explore_cli, "fetch_paper_search", lambda _query: results)
-
-    result = runner.invoke(cli, ["search-papers", "helios"])
-    assert result.exit_code == 0
-    assert "Paper Search Results for: helios" in result.output
-    assert "2603.04379" in result.output
-
-
-def test_search_organizations_command(monkeypatch) -> None:
-    runner = CliRunner()
-    organizations = [OrganizationResult(id="org-mit", name="MIT", image=None, slug="mit", raw={})]
-    monkeypatch.setattr(explore_cli, "fetch_organization_search", lambda _query: organizations)
-
-    result = runner.invoke(cli, ["search-organizations", "mit"])
-    assert result.exit_code == 0
-    assert "MIT" in result.output
-    assert "mit" in result.output
-    assert "MIT" in result.output
-
-
-def test_search_topics_command(monkeypatch) -> None:
-    runner = CliRunner()
-    monkeypatch.setattr(
-        explore_cli, "fetch_topic_search", lambda _query: ["deep-reinforcement-learning"]
-    )
-
-    result = runner.invoke(cli, ["search-topics", "reinforcement learning"])
-    assert result.exit_code == 0
-    assert "Suggested Topics" in result.output
-    assert "deep-reinforcement-learning" in result.output

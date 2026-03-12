@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-from ._core import BASE_API_URL, BASE_WEB_URL, ClientCore
+from ._comments import validate_comment_tag
+from ._core import BASE_API_URL, ClientCore
 from ._identifiers import (
-    extract_resolution_from_html,
     is_bare_arxiv_id,
     is_paper_version_uuid,
     is_versioned_arxiv_id,
     normalize_identifier,
 )
-from .exceptions import ResolutionError
+from .exceptions import AuthRequiredError, ResolutionError
 from .types import (
+    FeedCard,
     Mention,
     OverviewStatus,
     Paper,
+    PaperComment,
     PaperFullText,
     PaperOverview,
     PaperResources,
@@ -59,14 +62,8 @@ class PapersAPI:
             return resolved
 
         if is_bare_arxiv_id(normalized):
-            html = await self._core.get_text(f"{BASE_WEB_URL}/abs/{normalized}")
-            canonical_id, version_id, group_id = extract_resolution_from_html(html, normalized)
-            payload = await self._get_legacy_payload(canonical_id)
+            payload = await self._get_legacy_payload(normalized)
             resolved = self._resolved_from_legacy(identifier, payload)
-            if not resolved.version_id:
-                resolved.version_id = version_id
-            if not resolved.group_id:
-                resolved.group_id = group_id
             self._cache_resolution(normalized, resolved)
             return resolved
 
@@ -138,6 +135,116 @@ class PapersAPI:
             return []
         return [Mention.from_payload(item) for item in payload.get("mentions") or []]
 
+    async def comments(self, identifier: str) -> list[PaperComment]:
+        resolved = await self.resolve(identifier)
+        group_id = self._require_group_id(
+            identifier,
+            resolved,
+            operation="Comments lookup",
+        )
+        payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/legacy/{group_id}/comments")
+        if not isinstance(payload, list):
+            raise ResolutionError(f"Unexpected comments payload for '{identifier}'.")
+        return [PaperComment.from_payload(item) for item in payload if isinstance(item, dict)]
+
+    async def create_comment(
+        self,
+        identifier: str,
+        *,
+        body: str,
+        title: str | None = None,
+        tag: str = "general",
+    ) -> PaperComment:
+        return await self._submit_comment(
+            identifier,
+            body=body,
+            title=title,
+            tag=tag,
+            parent_comment_id=None,
+        )
+
+    async def reply_to_comment(
+        self,
+        identifier: str,
+        parent_comment_id: str,
+        *,
+        body: str,
+        title: str | None = None,
+        tag: str = "general",
+    ) -> PaperComment:
+        return await self._submit_comment(
+            identifier,
+            body=body,
+            title=title,
+            tag=tag,
+            parent_comment_id=parent_comment_id,
+        )
+
+    async def similar(self, identifier: str, limit: int | None = None) -> list[FeedCard]:
+        normalized = normalize_identifier(identifier)
+        if is_paper_version_uuid(normalized):
+            raise ResolutionError(
+                "Similar-papers lookup requires a bare or versioned arXiv ID. "
+                "UUID inputs are not supported by this endpoint."
+            )
+        if not is_bare_arxiv_id(normalized) and not is_versioned_arxiv_id(normalized):
+            raise ResolutionError(
+                f"Unsupported identifier '{identifier}'. Similar-papers lookup requires a bare "
+                "or versioned arXiv ID."
+            )
+
+        payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/{normalized}/similar-papers")
+        if not isinstance(payload, list):
+            raise ResolutionError(f"Unexpected similar-papers payload for '{identifier}'.")
+
+        seen_keys: set[str] = set()
+        cards: list[FeedCard] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            card = FeedCard.from_payload(item)
+            dedupe_key = card.canonical_id or card.version_id or card.paper_id or card.group_id
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            cards.append(card)
+
+        return cards[:limit] if limit is not None else cards
+
+    async def record_view(self, identifier: str) -> dict[str, Any] | None:
+        self._require_auth(
+            "alphaXiv paper view endpoints require an API key. Set ALPHAXIV_API_KEY, run "
+            "'alphaxiv auth set-api-key', or pass api_key into AlphaXivClient(...)."
+        )
+        resolved = await self.resolve(identifier)
+        group_id = self._require_group_id(
+            identifier,
+            resolved,
+            operation="Paper view recording",
+        )
+        response = await self._core.request(
+            "POST",
+            f"{BASE_API_URL}/papers/v3/{group_id}/view",
+        )
+        return self._response_payload(response)
+
+    async def toggle_vote(self, identifier: str) -> dict[str, Any] | None:
+        self._require_auth(
+            "alphaXiv paper vote endpoints require an API key. Set ALPHAXIV_API_KEY, run "
+            "'alphaxiv auth set-api-key', or pass api_key into AlphaXivClient(...)."
+        )
+        resolved = await self.resolve(identifier)
+        group_id = self._require_group_id(
+            identifier,
+            resolved,
+            operation="Paper vote toggling",
+        )
+        response = await self._core.request(
+            "POST",
+            f"{BASE_API_URL}/v2/papers/{group_id}/vote",
+        )
+        return self._response_payload(response)
+
     async def resources(self, identifier: str) -> PaperResources:
         paper = await self.get(identifier)
         mentions = await self.mentions(identifier)
@@ -189,7 +296,7 @@ class PapersAPI:
         payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/legacy/{canonical_id}")
         if not isinstance(payload, dict):
             raise ResolutionError(f"Unexpected legacy paper payload for '{canonical_id}'.")
-        self._legacy_cache[canonical_id] = payload
+        self._cache_legacy_payload(canonical_id, payload)
         return payload
 
     def _resolved_from_legacy(self, input_id: str, payload: dict[str, Any]) -> ResolvedPaper:
@@ -207,6 +314,7 @@ class PapersAPI:
             canonical_id=canonical_id,
             version_id=version.get("id"),
             group_id=group.get("id"),
+            title=version.get("title") or group.get("title"),
             raw=payload,
         )
 
@@ -223,6 +331,64 @@ class PapersAPI:
         for alias in aliases:
             self._resolution_cache[alias] = resolved
 
+    def _cache_legacy_payload(self, key: str, payload: dict[str, Any]) -> None:
+        aliases = {key}
+        paper = payload.get("paper") or {}
+        version = paper.get("paper_version") or {}
+        group = paper.get("paper_group") or {}
+        versionless_id = group.get("universal_paper_id") or version.get("universal_paper_id")
+        version_label = version.get("version_label")
+        if versionless_id:
+            aliases.add(versionless_id)
+        if versionless_id and version_label:
+            aliases.add(f"{versionless_id}{version_label}")
+        for alias in aliases:
+            self._legacy_cache[alias] = payload
+
+    def _require_auth(self, message: str) -> None:
+        if not self._core.authorization:
+            raise AuthRequiredError(message)
+
+    def _require_group_id(
+        self,
+        identifier: str,
+        resolved: ResolvedPaper,
+        *,
+        operation: str,
+    ) -> str:
+        if resolved.group_id:
+            return resolved.group_id
+        raise ResolutionError(
+            f"{operation} requires a bare or versioned arXiv ID. "
+            f"Could not determine a paper group ID for '{identifier}'."
+        )
+
+    def _require_version_id(
+        self,
+        identifier: str,
+        resolved: ResolvedPaper,
+        *,
+        operation: str,
+    ) -> str:
+        if resolved.version_id:
+            return resolved.version_id
+        raise ResolutionError(
+            f"{operation} requires a resolvable paper version ID. "
+            f"Could not determine a paper version ID for '{identifier}'."
+        )
+
+    def _response_payload(self, response: Any) -> dict[str, Any] | None:
+        if not response.content:
+            return None
+        try:
+            payload = response.json()
+        except json.JSONDecodeError:
+            text = response.text.strip()
+            return {"text": text} if text else None
+        if isinstance(payload, dict):
+            return payload
+        return {"data": payload}
+
     def _podcast_urls(self, podcast_path: str | None) -> tuple[str | None, str | None]:
         if not podcast_path:
             return None, None
@@ -231,3 +397,42 @@ class PapersAPI:
         podcast_url = f"{PODCASTS_BASE_URL}/{normalized_path}"
         transcript_url = f"{PODCASTS_BASE_URL}/{directory}/transcript.json"
         return podcast_url, transcript_url
+
+    async def _submit_comment(
+        self,
+        identifier: str,
+        *,
+        body: str,
+        title: str | None,
+        tag: str,
+        parent_comment_id: str | None,
+    ) -> PaperComment:
+        self._require_auth(
+            "alphaXiv comment creation endpoints require an API key. Set ALPHAXIV_API_KEY, run "
+            "'alphaxiv auth set-api-key', or pass api_key into AlphaXivClient(...)."
+        )
+        normalized_body = body.strip()
+        if not normalized_body:
+            raise ValueError("Comment body must not be empty.")
+        normalized_tag = validate_comment_tag(tag)
+        normalized_title = title.strip() if title else None
+        resolved = await self.resolve(identifier)
+        version_id = self._require_version_id(
+            identifier,
+            resolved,
+            operation="Comment creation",
+        )
+        response = await self._core.request(
+            "POST",
+            f"{BASE_API_URL}/papers/v2/{version_id}/comment",
+            json_data={
+                "body": normalized_body,
+                "title": normalized_title or None,
+                "tag": normalized_tag,
+                "parentCommentId": parent_comment_id,
+            },
+        )
+        payload = self._response_payload(response)
+        if not isinstance(payload, dict):
+            raise ResolutionError(f"Unexpected comment creation payload for '{identifier}'.")
+        return PaperComment.from_payload(payload)

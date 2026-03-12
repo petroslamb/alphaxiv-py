@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 
-from .exceptions import ResolutionError
-
 BARE_ARXIV_RE = re.compile(r"^\d{4}\.\d{4,5}$")
 VERSIONED_ARXIV_RE = re.compile(r"^\d{4}\.\d{4,5}v\d+$")
 UUID_RE = re.compile(
@@ -37,17 +35,3 @@ def is_versioned_arxiv_id(identifier: str) -> bool:
 
 def is_paper_version_uuid(identifier: str) -> bool:
     return bool(UUID_RE.fullmatch(identifier))
-
-
-def extract_resolution_from_html(html: str, bare_id: str) -> tuple[str, str, str]:
-    """Extract canonical/version/group identifiers from an alphaXiv paper HTML page."""
-    escaped_id = re.escape(bare_id)
-    pattern = re.compile(
-        rf'versionlessId:"{escaped_id}".*?canonicalId:"([^"]+)".*?versionId:"([^"]+)".*?groupId:"([^"]+)"',
-        re.DOTALL,
-    )
-    match = pattern.search(html)
-    if not match:
-        raise ResolutionError(f"Could not resolve bare arXiv ID '{bare_id}' from alphaXiv HTML.")
-    canonical_id, version_id, group_id = match.groups()
-    return canonical_id, version_id, group_id

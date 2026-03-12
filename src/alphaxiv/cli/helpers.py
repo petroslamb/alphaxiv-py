@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from ..auth import SavedAuth, load_authorization
+from ..auth import SavedApiKey, fetch_current_user, load_api_key_value
 from ..client import AlphaXivClient
 from ..paths import ensure_home_path, get_assistant_context_path, get_context_path
 from ..types import AssistantContext, ResolvedPaper
@@ -25,8 +26,8 @@ def run_async(awaitable):
 
 
 def make_client() -> AlphaXivClient:
-    """Create a client that reuses ALPHAXIV_API_KEY or saved auth when available."""
-    return AlphaXivClient(authorization=load_authorization())
+    """Create a client that reuses ALPHAXIV_API_KEY or a saved API key when available."""
+    return AlphaXivClient(api_key=load_api_key_value())
 
 
 def load_context() -> ResolvedPaper | None:
@@ -92,7 +93,7 @@ def get_effective_identifier(paper_id: str | None) -> str:
     current = load_context()
     if not current:
         raise click.ClickException(
-            "No current paper is set. Run 'alphaxiv use <paper-id>' or pass a paper id explicitly."
+            "No current paper is set. Run 'alphaxiv context use paper <paper-id>' or pass a paper id explicitly."
         )
     return current.preferred_id
 
@@ -104,47 +105,60 @@ def get_effective_session_id(session_id: str | None) -> str:
     current = load_assistant_context()
     if not current:
         raise click.ClickException(
-            "No current assistant chat is set. Run 'alphaxiv assistant use <session-id>' "
+            "No current assistant chat is set. Run 'alphaxiv context use assistant <session-id>' "
             "or start a chat first."
         )
     return current.session_id
 
 
 def render_context_table(resolved: ResolvedPaper) -> Table:
-    table = Table(title="Current alphaXiv Context")
+    table = Table(title="Current Paper Context")
     table.add_column("Field")
     table.add_column("Value")
-    table.add_row("Input ID", resolved.input_id or "-")
-    table.add_row("Bare ID", resolved.versionless_id or "-")
-    table.add_row("Canonical ID", resolved.canonical_id or "-")
+    table.add_row("Title", resolved.title or "-")
+    table.add_row("arXiv ID", resolved.versionless_id or "-")
+    table.add_row("Versioned ID", resolved.canonical_id or "-")
     table.add_row("Version UUID", resolved.version_id or "-")
     table.add_row("Group UUID", resolved.group_id or "-")
+    if resolved.input_id and resolved.input_id not in {
+        resolved.versionless_id,
+        resolved.canonical_id,
+        resolved.version_id,
+    }:
+        table.add_row("Input", resolved.input_id)
     return table
 
 
-def render_auth_table(saved_auth: SavedAuth, preferred_model: str | None = None) -> Table:
-    table = Table(title="alphaXiv Authentication")
+def refresh_api_key_user(saved_api_key: SavedApiKey) -> SavedApiKey:
+    """Populate user metadata for env-provided API keys when possible."""
+    if saved_api_key.user:
+        return saved_api_key
+    try:
+        user_payload = fetch_current_user(saved_api_key.api_key)
+    except Exception:
+        return saved_api_key
+    return replace(saved_api_key, user=user_payload)
+
+
+def render_api_key_table(saved_api_key: SavedApiKey) -> Table:
+    table = Table(title="alphaXiv API Key")
     table.add_column("Field")
     table.add_column("Value")
-    table.add_row("Status", "expired" if saved_auth.is_expired else "authenticated")
-    table.add_row("Source", saved_auth.source.replace("_", " "))
-    table.add_row("Kind", saved_auth.kind.replace("_", " "))
-    table.add_row("User", saved_auth.display_name or "-")
-    table.add_row("Email", saved_auth.email or "-")
-    table.add_row("User ID", saved_auth.user_id or "-")
-    table.add_row("Preferred Model", preferred_model or "-")
+    table.add_row("Status", "configured")
+    table.add_row("Source", saved_api_key.source.replace("_", " "))
+    table.add_row("Key Prefix", saved_api_key.key_prefix)
+    table.add_row("User", saved_api_key.display_name or "-")
+    table.add_row("Email", saved_api_key.email or "-")
+    table.add_row("User ID", saved_api_key.user_id or "-")
     table.add_row(
-        "Saved At", "env" if saved_auth.source == "env" else saved_auth.created_at.isoformat()
-    )
-    table.add_row(
-        "Expires At",
-        saved_auth.expires_at.isoformat() if saved_auth.expires_at else "-",
+        "Saved At",
+        "env" if saved_api_key.source == "env" else saved_api_key.saved_at.isoformat(),
     )
     return table
 
 
 def render_assistant_context_table(context: AssistantContext) -> Table:
-    table = Table(title="Current alphaXiv Assistant")
+    table = Table(title="Current Assistant Context")
     table.add_column("Field")
     table.add_column("Value")
     table.add_row("Session ID", context.session_id)
@@ -154,10 +168,7 @@ def render_assistant_context_table(context: AssistantContext) -> Table:
         "Newest Message",
         context.newest_message_at.isoformat() if context.newest_message_at else "-",
     )
-    table.add_row(
-        "Paper",
-        context.paper.preferred_id if context.paper else "-",
-    )
+    table.add_row("Paper", context.paper.preferred_id if context.paper else "-")
     return table
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 SEARCH_PAYLOAD = [
     {
         "link": "/abs/2603.04379",
@@ -168,13 +170,201 @@ MENTIONS_PAYLOAD = {
     ]
 }
 
-ABS_HTML = """
-<html>
-  <body>
-    versionlessId:"2603.04379",canonicalId:"2603.04379v1",versionId:"019cbc05-f158-7e3a-b9c1-a43274c0130b",groupId:"019cbc05-f11c-75c7-a13b-b028107d6a76"
-  </body>
-</html>
-"""
+COMMENTS_PAYLOAD = [
+    {
+        "id": "comment-root",
+        "userId": "user-1",
+        "isAuthor": False,
+        "title": "Interesting compression result",
+        "body": "How does this compare against the baseline at longer horizons?",
+        "annotation": None,
+        "tag": "question",
+        "upvotes": 12,
+        "wasEdited": False,
+        "hasUpvoted": False,
+        "hasDownvoted": False,
+        "hasFlagged": False,
+        "universalId": "1706.03762",
+        "paperGroupId": "015c9ef4-ac30-768d-928b-847320902575",
+        "paperVersionId": "0189b531-a930-7613-9d2e-dd918c8435a5",
+        "paperTitle": "Attention Is All You Need",
+        "parentCommentId": None,
+        "author": {
+            "id": "author-1",
+            "username": "research_reader",
+            "realName": "Research Reader",
+            "avatar": "https://example.com/avatar.png",
+            "institution": "MIT",
+            "reputation": 42,
+            "verified": True,
+            "role": "user",
+        },
+        "endorsements": [],
+        "date": "2026-03-10T10:11:12.000Z",
+        "authorResponded": True,
+        "responses": [
+            {
+                "id": "comment-child",
+                "userId": "user-2",
+                "isAuthor": True,
+                "title": None,
+                "body": "The appendix includes the long-horizon comparison table.",
+                "annotation": None,
+                "tag": "author-response",
+                "upvotes": 5,
+                "wasEdited": False,
+                "hasUpvoted": False,
+                "hasDownvoted": False,
+                "hasFlagged": False,
+                "universalId": "1706.03762",
+                "paperGroupId": "015c9ef4-ac30-768d-928b-847320902575",
+                "paperVersionId": "0189b531-a930-7613-9d2e-dd918c8435a5",
+                "paperTitle": "Attention Is All You Need",
+                "parentCommentId": "comment-root",
+                "author": {
+                    "id": "author-2",
+                    "username": "paper_author",
+                    "realName": "Paper Author",
+                    "avatar": "https://example.com/author.png",
+                    "institution": "Google Brain",
+                    "reputation": 100,
+                    "verified": True,
+                    "role": "author",
+                },
+                "endorsements": [],
+                "date": "2026-03-10T11:00:00.000Z",
+                "authorResponded": False,
+                "responses": [],
+            }
+        ],
+    }
+]
+
+COMMENT_CREATE_RESPONSE = cast(dict[str, Any], COMMENTS_PAYLOAD[0]).copy()
+COMMENT_CREATE_RESPONSE["responses"] = []
+
+COMMENT_REPLY_RESPONSE = cast(
+    dict[str, Any],
+    cast(list[dict[str, Any]], cast(dict[str, Any], COMMENTS_PAYLOAD[0])["responses"])[0],
+).copy()
+COMMENT_REPLY_RESPONSE["responses"] = []
+
+SIMILAR_PAPERS_PAYLOAD = [
+    {
+        "id": "group-helios",
+        "paper_group_id": "group-helios",
+        "title": "Helios: Real Real-Time Long Video Generation Model",
+        "abstract": "We introduce Helios.",
+        "paper_summary": {"summary": "Helios summary", "results": ["19.53 FPS"]},
+        "image_url": "image/2603.04379v1.png",
+        "universal_paper_id": "2603.04379",
+        "metrics": {
+            "visits_count": {"all": 2974, "last_7_days": 2974},
+            "total_votes": 39,
+            "public_total_votes": 107,
+            "x_likes": 0,
+        },
+        "publication_date": "2026-03-04T18:45:21.000Z",
+        "updated_at": "2026-03-05T03:23:51.964Z",
+        "topics": ["Computer Science", "generative-models"],
+        "organization_info": [{"name": "MIT"}],
+        "authors": ["Shenghai Yuan"],
+        "github_stars": 235,
+        "github_url": "https://github.com/PKU-YuanGroup/Helios",
+        "canonical_id": "2603.04379v1",
+        "version_id": "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+    },
+    {
+        "id": "group-helios-duplicate",
+        "paper_group_id": "group-helios-duplicate",
+        "title": "Helios duplicate listing",
+        "abstract": "Duplicate entry that should be removed.",
+        "paper_summary": {"summary": "Duplicate", "results": []},
+        "image_url": "image/2603.04379v1.png",
+        "universal_paper_id": "2603.04379",
+        "metrics": {
+            "visits_count": {"all": 10, "last_7_days": 5},
+            "total_votes": 1,
+            "public_total_votes": 1,
+            "x_likes": 0,
+        },
+        "publication_date": "2026-03-04T18:45:21.000Z",
+        "updated_at": "2026-03-05T03:23:51.964Z",
+        "topics": ["Computer Science"],
+        "organization_info": [],
+        "authors": ["Shenghai Yuan"],
+        "canonical_id": "2603.04379v1",
+        "version_id": "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+    },
+    {
+        "id": "group-rlm",
+        "paper_group_id": "group-rlm",
+        "title": "Recursive Language Models",
+        "abstract": "A new model family.",
+        "paper_summary": {"summary": "RLM summary", "results": ["325 X likes"]},
+        "image_url": "image/2512.24601v1.png",
+        "universal_paper_id": "2512.24601",
+        "metrics": {
+            "visits_count": {"all": 1200, "last_7_days": 800},
+            "total_votes": 188,
+            "public_total_votes": 514,
+            "x_likes": 325,
+        },
+        "publication_date": "2025-12-20T08:00:00.000Z",
+        "updated_at": "2025-12-21T08:00:00.000Z",
+        "topics": ["Computer Science", "artificial-intelligence"],
+        "organization_info": [{"name": "Meta"}],
+        "authors": ["Andrew McCallum"],
+        "github_stars": 165,
+        "github_url": "https://github.com/example/rlm",
+        "canonical_id": "2512.24601v1",
+        "version_id": "version-rlm",
+    },
+]
+
+FOLDERS_PAYLOAD = [
+    {
+        "id": "folder-reading",
+        "name": "Reading List",
+        "type": "collection",
+        "order": 1,
+        "parentId": None,
+        "sharingStatus": "private",
+        "papers": [
+            {
+                "paperGroupId": "019cbc05-f11c-75c7-a13b-b028107d6a76",
+                "universalPaperId": "2603.04379",
+                "canonicalId": "2603.04379v1",
+                "paperVersionId": "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+                "topics": ["Computer Science", "cs.CV"],
+                "title": "Helios: Real Real-Time Long Video Generation Model",
+                "abstract": "We introduce Helios.",
+            }
+        ],
+    },
+    {
+        "id": "folder-bookmarks",
+        "name": "Bookmarks",
+        "type": "bookmark",
+        "order": 2,
+        "parentId": None,
+        "sharingStatus": "private",
+        "papers": [],
+    },
+]
+
+URL_METADATA_PAYLOAD = {
+    "title": "PKU-YuanGroup/Helios",
+    "description": "Code for the Helios paper.",
+    "image": "https://opengraph.githubassets.com/helios.png",
+    "favicon": "https://github.githubassets.com/favicons/favicon.svg",
+    "siteName": "GitHub",
+    "author": "PKU-YuanGroup",
+}
+
+PAPER_VIEW_RESPONSE = {"ok": True, "recorded": True}
+PAPER_VOTE_RESPONSE = {"ok": True, "toggled": True}
+COMMENT_UPVOTE_RESPONSE = {"ok": True, "toggled": True}
 
 EXPLORE_FEED_HTML = """
 <html>

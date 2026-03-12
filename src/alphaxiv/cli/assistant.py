@@ -8,15 +8,17 @@ from typing import Literal
 import click
 from rich.table import Table
 
+from ..exceptions import AlphaXivError
 from ..types import (
     AssistantContext,
     AssistantMessage,
     AssistantRun,
     AssistantSession,
     AssistantStreamEvent,
+    UrlMetadata,
 )
+from .grouped import WrappedHelpGroup
 from .helpers import (
-    clear_assistant_context,
     console,
     get_effective_session_id,
     load_assistant_context,
@@ -27,7 +29,23 @@ from .helpers import (
     save_assistant_context,
 )
 
-assistant = click.Group("assistant", help="Authenticated assistant chat commands.")
+assistant = WrappedHelpGroup(
+    "assistant",
+    help=(
+        "Use the authenticated alphaXiv assistant, session history, and related metadata APIs.\n\n"
+        "Examples:\n"
+        "  alphaxiv assistant list\n"
+        '  alphaxiv assistant start "Find papers on agent frameworks"\n'
+        '  alphaxiv assistant reply "Focus on the most cited ones"'
+    ),
+)
+
+
+def _run_with_click_errors(awaitable):
+    try:
+        return run_async(awaitable)
+    except AlphaXivError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 def fetch_sessions(paper_id: str | None = None, limit: int | None = None) -> list[AssistantSession]:
@@ -35,7 +53,7 @@ def fetch_sessions(paper_id: str | None = None, limit: int | None = None) -> lis
         async with make_client() as client:
             return await client.assistant.list(paper_id=paper_id, limit=limit)
 
-    return run_async(_list())
+    return _run_with_click_errors(_list())
 
 
 def fetch_history(session_id: str) -> list[AssistantMessage]:
@@ -43,7 +61,7 @@ def fetch_history(session_id: str) -> list[AssistantMessage]:
         async with make_client() as client:
             return await client.assistant.history(session_id)
 
-    return run_async(_history())
+    return _run_with_click_errors(_history())
 
 
 def set_model_preference(model: str) -> str:
@@ -51,7 +69,23 @@ def set_model_preference(model: str) -> str:
         async with make_client() as client:
             return await client.assistant.set_preferred_model(model)
 
-    return run_async(_set())
+    return _run_with_click_errors(_set())
+
+
+def fetch_preferred_model() -> str:
+    async def _get() -> str:
+        async with make_client() as client:
+            return await client.assistant.preferred_model(refresh=True)
+
+    return _run_with_click_errors(_get())
+
+
+def fetch_url_metadata(url: str) -> UrlMetadata:
+    async def _get() -> UrlMetadata:
+        async with make_client() as client:
+            return await client.assistant.url_metadata(url)
+
+    return _run_with_click_errors(_get())
 
 
 def run_assistant_chat(
@@ -131,7 +165,7 @@ def run_assistant_chat(
                 on_event=render_event,
             )
 
-    run = run_async(_run())
+    run = _run_with_click_errors(_run())
     if not raw and run.output_text and not state["printed_newline_after_answer"]:
         console.print()
     return run
@@ -196,10 +230,21 @@ def _message_sort_key(message: AssistantMessage) -> tuple[float, str]:
 
 
 @assistant.command("list")
-@click.option("--paper", "paper_id", default=None, help="List chats for a specific paper.")
-@click.option("--limit", type=int, default=10, show_default=True)
+@click.option(
+    "--paper",
+    "paper_id",
+    default=None,
+    help="Restrict the listing to chats associated with one paper.",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Maximum number of sessions to print after sorting by newest message.",
+)
 def list_sessions(paper_id: str | None, limit: int) -> None:
-    """List assistant sessions."""
+    """List saved assistant sessions for the homepage or a specific paper."""
     sessions = fetch_sessions(paper_id=paper_id, limit=limit)
     title = "Paper Assistant Sessions" if paper_id else "Homepage Assistant Sessions"
     table = Table(title=title)
@@ -218,22 +263,66 @@ def list_sessions(paper_id: str | None, limit: int) -> None:
 @assistant.command("set-model")
 @click.argument("model")
 def set_model(model: str) -> None:
-    """Persist the preferred assistant model."""
+    """Persist the preferred assistant model in alphaXiv user preferences."""
     selected = set_model_preference(model)
     console.print(f"[green]Preferred assistant model set:[/green] {selected}")
 
 
+@assistant.command("model")
+def show_model() -> None:
+    """Show the current preferred assistant model from alphaXiv user preferences."""
+    model = fetch_preferred_model()
+    console.print(f"[bold]Preferred assistant model:[/bold] {model}")
+
+
+@assistant.command("url-metadata")
+@click.argument("url")
+@click.option("--raw", is_flag=True, help="Print the raw metadata JSON payload.")
+def show_url_metadata(url: str, raw: bool) -> None:
+    """Fetch the assistant's link-preview metadata for a URL."""
+    metadata = fetch_url_metadata(url)
+    if raw:
+        print_json(metadata.raw)
+        return
+    table = Table(title="Assistant URL Metadata")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("URL", metadata.url)
+    table.add_row("Title", metadata.title or "-")
+    table.add_row("Description", metadata.description or "-")
+    table.add_row("Site", metadata.site_name or "-")
+    table.add_row("Author", metadata.author or "-")
+    table.add_row("Image", metadata.image_url or "-")
+    table.add_row("Favicon", metadata.favicon or "-")
+    console.print(table)
+
+
 @assistant.command("start")
 @click.argument("message")
-@click.option("--paper", "paper_id", default=None, help="Start a paper-scoped chat.")
-@click.option("--model", default=None, help="Assistant model label or wire id.")
+@click.option(
+    "--paper",
+    "paper_id",
+    default=None,
+    help="Start a paper-scoped chat by resolving the paper to a version id first.",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="One-off assistant model label or wire id for this request only.",
+)
 @click.option(
     "--web-search",
     type=click.Choice(["off", "full"], case_sensitive=False),
     default="off",
     show_default=True,
+    help="Whether the assistant may use alphaXiv's web-search mode for this request.",
 )
-@click.option("--thinking/--no-thinking", default=True, show_default=True)
+@click.option(
+    "--thinking/--no-thinking",
+    default=True,
+    show_default=True,
+    help="Request reasoning deltas in the streamed assistant response.",
+)
 @click.option("--raw", is_flag=True, help="Print raw SSE event payloads.")
 def start_chat(
     message: str,
@@ -243,7 +332,7 @@ def start_chat(
     thinking: bool,
     raw: bool,
 ) -> None:
-    """Start a new assistant chat."""
+    """Start a new assistant chat and save the created session as current."""
     run = run_assistant_chat(
         message=message,
         paper_id=paper_id,
@@ -266,9 +355,19 @@ def start_chat(
     type=click.Choice(["off", "full"], case_sensitive=False),
     default="off",
     show_default=True,
+    help="Whether the assistant may use alphaXiv's web-search mode for this request.",
 )
-@click.option("--model", default=None, help="Assistant model label or wire id.")
-@click.option("--thinking/--no-thinking", default=True, show_default=True)
+@click.option(
+    "--model",
+    default=None,
+    help="One-off assistant model label or wire id for this reply only.",
+)
+@click.option(
+    "--thinking/--no-thinking",
+    default=True,
+    show_default=True,
+    help="Request reasoning deltas in the streamed assistant response.",
+)
 @click.option("--raw", is_flag=True, help="Print raw SSE event payloads.")
 def reply_chat(
     parts: tuple[str, ...],
@@ -277,7 +376,7 @@ def reply_chat(
     thinking: bool,
     raw: bool,
 ) -> None:
-    """Continue an assistant chat."""
+    """Continue the current chat, or target an explicit session id first."""
     if len(parts) == 1:
         session_id = None
         message = parts[0]
@@ -313,7 +412,7 @@ def reply_chat(
 @click.argument("session_id", required=False)
 @click.option("--raw", is_flag=True, help="Print raw message payloads.")
 def show_history(session_id: str | None, raw: bool) -> None:
-    """Show assistant message history."""
+    """Show message history for the current or explicitly selected assistant session."""
     effective_session_id = get_effective_session_id(session_id)
     history = fetch_history(effective_session_id)
     if raw:
@@ -336,20 +435,3 @@ def show_history(session_id: str | None, raw: bool) -> None:
             console.print(f"\n[dim]Tool Result[/dim]\n{message.content or ''}")
         else:
             console.print(f"\n[dim]{message.message_type}[/dim]\n{message.content or ''}")
-
-
-@assistant.command("use")
-@click.argument("session_id")
-def use_session(session_id: str) -> None:
-    """Set the current assistant session context."""
-    context = resolve_context_for_session(session_id)
-    path = save_assistant_context(context)
-    console.print(f"[green]Current assistant chat set:[/green] {context.session_id}")
-    console.print(f"[dim]Assistant context saved to {path}[/dim]")
-
-
-@assistant.command("clear")
-def clear_session() -> None:
-    """Clear the current assistant session context."""
-    clear_assistant_context()
-    console.print("[green]Cleared current assistant chat context.[/green]")

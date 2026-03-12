@@ -13,9 +13,24 @@ from ..types import (
     OrganizationResult,
     SearchResult,
 )
+from .grouped import WrappedHelpGroup
 from .helpers import console, make_client, run_async
 
-feed = click.Group("feed", help="Homepage feed commands.")
+search = WrappedHelpGroup(
+    "search",
+    help=(
+        "Search public alphaXiv paper, topic, and organization endpoints.\n\n"
+        "Examples:\n"
+        '  alphaxiv search all "attention is all you need"\n'
+        '  alphaxiv search papers "graph neural networks"\n'
+        '  alphaxiv search topics "reinforcement learning"'
+    ),
+)
+
+feed = WrappedHelpGroup(
+    "feed",
+    help="Inspect the public alphaXiv homepage feed and its available filters.",
+)
 
 
 def fetch_homepage_search(query: str) -> HomepageSearchResults:
@@ -126,6 +141,42 @@ def _render_organizations_table(
     console.print(table)
 
 
+@search.command("all")
+@click.argument("query")
+def search_all(query: str) -> None:
+    """Search papers, topic suggestions, and organizations in one request."""
+    results = fetch_homepage_search(query)
+    _render_papers_table(query, results)
+    if results.topics:
+        _render_topics_table(results.topics)
+    if results.organizations:
+        _render_organizations_table(results.organizations)
+
+
+@search.command("papers")
+@click.argument("query")
+def search_papers(query: str) -> None:
+    """Search only the public paper search endpoint used by the homepage."""
+    results = fetch_paper_search(query)
+    _render_paper_results_table(query, results)
+
+
+@search.command("organizations")
+@click.argument("query")
+def search_organizations(query: str) -> None:
+    """Search only the public organization search endpoint."""
+    results = fetch_organization_search(query)
+    _render_organizations_table(results, title=f"Organization Results for: {query}")
+
+
+@search.command("topics")
+@click.argument("query")
+def search_topics(query: str) -> None:
+    """Return the closest topic suggestions for a natural-language query."""
+    results = fetch_topic_search(query)
+    _render_topics_table(results)
+
+
 @feed.command("list")
 @click.option(
     "--sort",
@@ -177,7 +228,7 @@ def list_feed(
     interval: str | None,
     limit: int,
 ) -> None:
-    """List homepage feed cards."""
+    """List public homepage feed cards using alphaXiv-style filters."""
     source_value = None
     if source == "github":
         source_value = "GitHub"
@@ -228,7 +279,7 @@ def list_feed(
 
 @feed.command("filters")
 def show_filter_options() -> None:
-    """Show known homepage feed filter options."""
+    """Show the current feed sorts, filters, sources, and top organizations."""
     options = fetch_filter_options()
 
     sorts_table = Table(title="Feed Sorts")
@@ -261,37 +312,3 @@ def show_filter_options() -> None:
     for organization in options.organizations:
         organizations_table.add_row(organization.name, organization.slug or "-")
     console.print(organizations_table)
-
-
-def register_explore_commands(cli):
-    @cli.command("search")
-    @click.argument("query")
-    def search(query: str) -> None:
-        """Search alphaXiv homepage papers, topics, and organizations."""
-        results = fetch_homepage_search(query)
-        _render_papers_table(query, results)
-        if results.topics:
-            _render_topics_table(results.topics)
-        if results.organizations:
-            _render_organizations_table(results.organizations)
-
-    @cli.command("search-papers")
-    @click.argument("query")
-    def search_papers(query: str) -> None:
-        """Search only the public paper endpoint used by the homepage."""
-        results = fetch_paper_search(query)
-        _render_paper_results_table(query, results)
-
-    @cli.command("search-organizations")
-    @click.argument("query")
-    def search_organizations(query: str) -> None:
-        """Search only the public organization endpoint used by the homepage."""
-        results = fetch_organization_search(query)
-        _render_organizations_table(results, title=f"Organization Results for: {query}")
-
-    @cli.command("search-topics")
-    @click.argument("query")
-    def search_topics(query: str) -> None:
-        """Search only the public closest-topic endpoint used by the homepage."""
-        results = fetch_topic_search(query)
-        _render_topics_table(results)

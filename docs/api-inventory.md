@@ -45,14 +45,15 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | Method | Path | Access | Description | Used by alphaxiv-py |
 | --- | --- | --- | --- | --- |
 | `GET` | `/papers/v3/legacy/{canonical_or_versioned_id}` | public | Main paper metadata payload for canonical or versioned arXiv IDs. | yes |
-| `GET` | `/papers/v3/legacy/{bare_id}` | public | Direct legacy lookup by bare arXiv ID. | no |
-| `GET` | `/papers/v3/legacy/{paperGroupId}/comments` | public | Public paper comments thread. | no |
+| `GET` | `/papers/v3/legacy/{bare_id}` | public | Direct legacy lookup by bare arXiv ID. | yes |
+| `GET` | `/papers/v3/legacy/{paperGroupId}/comments` | public | Public paper comments thread. | yes |
+| `POST` | `/papers/v2/{paperVersionId}/comment` | auth write | Creates a top-level paper comment or a reply when `parentCommentId` is set. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/full-text` | public | Page-level extracted paper text. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/{lang}` | public | AI overview or blog payload for a paper version. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/status` | public | Overview generation and translation status. | yes |
 | `GET` | `/papers/v3/x-mentions-db/{paperGroupId}` | public | Social mentions and related resource metadata. | yes |
-| `POST` | `/papers/v3/{paperGroupId}/view` | public write | Records a paper view. | no |
-| `GET` | `/papers/v3/{paperId}/similar-papers` | public | Similar-papers list shown in the paper UI. | no |
+| `POST` | `/papers/v3/{paperGroupId}/view` | public write | Records a paper view. | yes |
+| `GET` | `/papers/v3/{paperId}/similar-papers` | public | Similar-papers list shown in the paper UI. | yes |
 
 ### Assistant
 
@@ -62,7 +63,7 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/assistant/v2?variant=paper&paperVersion={paperVersionId}` | auth | Lists paper-scoped assistant sessions. | yes |
 | `GET` | `/assistant/v2/{sessionId}/messages` | auth | Returns structured assistant message history. | yes |
 | `POST` | `/assistant/v2/chat` | auth | Starts or continues an assistant chat and returns SSE output. | yes |
-| `GET` | `/assistant/v2/url-metadata?url=...` | auth | Fetches link metadata used in assistant or comment rendering. | no |
+| `GET` | `/assistant/v2/url-metadata?url=...` | auth | Fetches link metadata used in assistant or comment rendering. | yes |
 
 ### User and Preferences
 
@@ -70,14 +71,15 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | --- | --- | --- | --- | --- |
 | `GET` | `/users/v3` | auth | Current user profile and preferences. | yes |
 | `PATCH` | `/users/v3/preferences` | auth write | Updates user preferences such as preferred assistant model. | yes |
-| `GET` | `/folders/v3` | auth | Returns user folders or bookmark containers. | no |
+| `GET` | `/folders/v3` | auth | Returns user folders or bookmark containers. | yes |
 
 ### Voting and Social Actions
 
 | Method | Path | Access | Description | Used by alphaxiv-py |
 | --- | --- | --- | --- | --- |
-| `POST` | `/v2/papers/{paperId}/vote` | auth write | Toggles a paper like or vote. | no |
-| `POST` | `/comments/v2/{commentId}/upvote` | auth write | Toggles a comment upvote. | no |
+| `POST` | `/v2/papers/{paperId}/vote` | auth write | Toggles a paper like or vote. | yes |
+| `POST` | `/comments/v2/{commentId}/upvote` | auth write | Toggles a comment upvote. | yes |
+| `DELETE` | `/comments/v2/{commentId}` | auth write | Deletes a comment by id. | yes |
 
 ## Related Non-API Asset Endpoints
 
@@ -97,9 +99,9 @@ These are the endpoint groups currently wired into the SDK and CLI:
 
 - Search: `/search/v2/paper/fast`, `/v1/search/closest-topic`, `/organizations/v2/search`
 - Feed support: `/organizations/v2/top`
-- Papers: `/papers/v3/legacy/{id}`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/x-mentions-db/{paperGroupId}`
-- Assistant: `/assistant/v2?variant=homepage`, `/assistant/v2?variant=paper&paperVersion=...`, `/assistant/v2/{sessionId}/messages`, `/assistant/v2/chat`
-- Auth and preferences: `/users/v3`, `/users/v3/preferences`
+- Papers: `/papers/v3/legacy/{id}`, `/papers/v3/legacy/{paperGroupId}/comments`, `/papers/v2/{paperVersionId}/comment`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/x-mentions-db/{paperGroupId}`, `/papers/v3/{paperGroupId}/view`, `/papers/v3/{paperId}/similar-papers`, `/v2/papers/{paperId}/vote`
+- Assistant: `/assistant/v2?variant=homepage`, `/assistant/v2?variant=paper&paperVersion=...`, `/assistant/v2/{sessionId}/messages`, `/assistant/v2/chat`, `/assistant/v2/url-metadata`
+- Auth and preferences: `/users/v3`, `/users/v3/preferences`, `/folders/v3`, `/comments/v2/{commentId}/upvote`, `/comments/v2/{commentId}`
 - Related hosts: `fetcher.alphaxiv.org` PDF URLs and `paper-podcasts.alphaxiv.org` transcript or podcast assets
 
 ## Notes
@@ -107,4 +109,6 @@ These are the endpoint groups currently wired into the SDK and CLI:
 - The homepage paper feed is largely server-rendered on `www.alphaxiv.org`, with API support from endpoints like `/organizations/v2/top`.
 - `PATCH /users/v3/preferences` appears broader than model selection alone; the web UI uses it for other assistant-pane preferences too.
 - `/papers/v3/{paperId}/similar-papers` returns noisy variants for some papers, including malformed or duplicate IDs. Any client support should canonicalize those results before surfacing them.
+- `POST /papers/v2/{paperVersionId}/comment` supports both top-level comments and replies. The web payload also contains annotation fields, but the current SDK/CLI intentionally expose only text fields in v1.
+- Multiple plausible comment edit routes were probed live and returned `404`; comment editing is not currently confirmed.
 - This inventory is based on live observation, not on official vendor documentation.

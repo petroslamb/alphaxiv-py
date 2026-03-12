@@ -5,31 +5,23 @@ from __future__ import annotations
 import click
 
 from . import __version__
-from .cli import (
-    assistant,
-    feed,
-    paper,
-    pdf,
-    register_explore_commands,
-    register_paper_commands,
-    register_session_commands,
-)
-from .cli.grouped import SectionedGroup
+from .cli import assistant, auth, context, feed, folders, paper, search
+from .cli.grouped import WrappedHelpGroup
 
 
-@click.group(cls=SectionedGroup)
+@click.group(cls=WrappedHelpGroup)
 @click.version_option(version=__version__, prog_name="alphaXiv CLI")
 def cli() -> None:
-    """alphaXiv CLI."""
+    """Explore alphaXiv public APIs and authenticated assistant features."""
 
 
-register_session_commands(cli)
-register_explore_commands(cli)
-register_paper_commands(cli)
-cli.add_command(assistant)
+cli.add_command(auth)
+cli.add_command(context)
+cli.add_command(search)
 cli.add_command(feed)
 cli.add_command(paper)
-cli.add_command(pdf)
+cli.add_command(assistant)
+cli.add_command(folders)
 
 
 def main() -> None:

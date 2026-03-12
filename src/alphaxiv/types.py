@@ -171,6 +171,7 @@ class ResolvedPaper:
     canonical_id: str | None
     version_id: str | None
     group_id: str | None
+    title: str | None = None
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
@@ -184,6 +185,7 @@ class ResolvedPaper:
             "canonical_id": self.canonical_id,
             "version_id": self.version_id,
             "group_id": self.group_id,
+            "title": self.title,
         }
 
     @classmethod
@@ -194,6 +196,191 @@ class ResolvedPaper:
             canonical_id=payload.get("canonical_id"),
             version_id=payload.get("version_id"),
             group_id=payload.get("group_id"),
+            title=payload.get("title"),
+        )
+
+
+@dataclass(slots=True)
+class CommentAuthor:
+    id: str
+    username: str | None
+    real_name: str | None
+    avatar_url: str | None
+    institution: str | None
+    reputation: int | None
+    verified: bool
+    role: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @property
+    def display_name(self) -> str:
+        return self.real_name or self.username or self.id or "Unknown"
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> CommentAuthor:
+        reputation = payload.get("reputation")
+        return cls(
+            id=payload.get("id", ""),
+            username=payload.get("username"),
+            real_name=payload.get("realName"),
+            avatar_url=payload.get("avatar") or payload.get("avatarUrl"),
+            institution=payload.get("institution"),
+            reputation=reputation if isinstance(reputation, int) else None,
+            verified=bool(payload.get("verified")),
+            role=payload.get("role"),
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class PaperComment:
+    id: str
+    paper_group_id: str | None
+    paper_version_id: str | None
+    parent_comment_id: str | None
+    title: str | None
+    body: str
+    tag: str | None
+    annotation: Any
+    upvotes: int
+    has_upvoted: bool
+    has_downvoted: bool
+    has_flagged: bool
+    is_author: bool
+    was_edited: bool
+    universal_id: str | None
+    paper_title: str | None
+    author_responded: bool
+    date: datetime | None
+    author: CommentAuthor | None
+    endorsements: list[dict[str, Any]]
+    responses: list[PaperComment]
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PaperComment:
+        author_payload = payload.get("author")
+        return cls(
+            id=payload.get("id", ""),
+            paper_group_id=payload.get("paperGroupId"),
+            paper_version_id=payload.get("paperVersionId"),
+            parent_comment_id=payload.get("parentCommentId"),
+            title=payload.get("title"),
+            body=payload.get("body", ""),
+            tag=payload.get("tag"),
+            annotation=payload.get("annotation"),
+            upvotes=payload.get("upvotes", 0),
+            has_upvoted=bool(payload.get("hasUpvoted")),
+            has_downvoted=bool(payload.get("hasDownvoted")),
+            has_flagged=bool(payload.get("hasFlagged")),
+            is_author=bool(payload.get("isAuthor")),
+            was_edited=bool(payload.get("wasEdited")),
+            universal_id=payload.get("universalId"),
+            paper_title=payload.get("paperTitle"),
+            author_responded=bool(payload.get("authorResponded")),
+            date=parse_datetime(payload.get("date")),
+            author=CommentAuthor.from_payload(author_payload)
+            if isinstance(author_payload, dict)
+            else None,
+            endorsements=[
+                item for item in (payload.get("endorsements") or []) if isinstance(item, dict)
+            ],
+            responses=[
+                PaperComment.from_payload(item)
+                for item in payload.get("responses") or []
+                if isinstance(item, dict)
+            ],
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class FolderPaper:
+    paper_group_id: str
+    universal_paper_id: str | None
+    canonical_id: str | None
+    version_id: str | None
+    title: str
+    abstract: str | None
+    topics: list[str]
+    raw: dict[str, Any] = field(repr=False)
+
+    @property
+    def preferred_id(self) -> str:
+        return (
+            self.canonical_id or self.universal_paper_id or self.version_id or self.paper_group_id
+        )
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> FolderPaper:
+        return cls(
+            paper_group_id=payload.get("paperGroupId", ""),
+            universal_paper_id=payload.get("universalPaperId") or payload.get("universal_paper_id"),
+            canonical_id=payload.get("canonicalId") or payload.get("canonical_id"),
+            version_id=payload.get("paperVersionId") or payload.get("version_id"),
+            title=payload.get("title", ""),
+            abstract=payload.get("abstract"),
+            topics=list(payload.get("topics") or []),
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class Folder:
+    id: str
+    name: str
+    folder_type: str | None
+    order: int | None
+    parent_id: str | None
+    sharing_status: str | None
+    papers: list[FolderPaper]
+    raw: dict[str, Any] = field(repr=False)
+
+    @property
+    def paper_count(self) -> int:
+        return len(self.papers)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Folder:
+        order = payload.get("order")
+        return cls(
+            id=payload.get("id", ""),
+            name=payload.get("name", ""),
+            folder_type=payload.get("type"),
+            order=order if isinstance(order, int) else None,
+            parent_id=payload.get("parentId"),
+            sharing_status=payload.get("sharingStatus"),
+            papers=[
+                FolderPaper.from_payload(item)
+                for item in payload.get("papers") or []
+                if isinstance(item, dict)
+            ],
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class UrlMetadata:
+    url: str
+    title: str | None
+    description: str | None
+    image_url: str | None
+    favicon: str | None
+    site_name: str | None
+    author: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, *, url: str, payload: dict[str, Any]) -> UrlMetadata:
+        return cls(
+            url=url,
+            title=payload.get("title"),
+            description=payload.get("description"),
+            image_url=payload.get("image") or payload.get("imageUrl"),
+            favicon=payload.get("favicon"),
+            site_name=payload.get("siteName") or payload.get("site_name"),
+            author=payload.get("author"),
+            raw=payload,
         )
 
 
