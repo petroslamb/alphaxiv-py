@@ -28,6 +28,18 @@ Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. T
 ## Installation
 
 ```bash
+uv add alphaxiv-py
+```
+
+or
+
+```bash
+pip install alphaxiv-py
+```
+
+For local development:
+
+```bash
 uv pip install -e .
 ```
 
