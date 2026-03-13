@@ -1,5 +1,6 @@
 """Public exports for alphaxiv-py."""
 
+from ._version import __version__
 from .assistant import AssistantAPI
 from .client import AlphaXivClient
 from .exceptions import AlphaXivError, APIError, AuthRequiredError, ResolutionError
@@ -81,6 +82,5 @@ __all__ = [
     "ResolvedPaper",
     "SearchResult",
     "UrlMetadata",
+    "__version__",
 ]
-
-__version__ = "0.1.0"

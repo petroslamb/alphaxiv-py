@@ -10,13 +10,13 @@ from typing import Any
 
 import httpx
 
+from ._version import USER_AGENT
 from .exceptions import APIError
 
 BASE_API_URL = "https://api.alphaxiv.org"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_CONNECT_TIMEOUT = 10.0
 DEFAULT_RETRIES = 2
-USER_AGENT = "alphaxiv-py/0.1.0"
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 
 
