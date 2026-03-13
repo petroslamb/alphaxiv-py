@@ -31,6 +31,14 @@ def test_cli_public_search_and_feed_smoke(
     assert_cli_ok(feed_result, "feed", "list", "--sort", "hot", "--limit", "1")
     assert "alphaXiv Feed" in feed_result.output
 
+    filter_search_result = invoke_cli(
+        cli_runner,
+        ["feed", "filters", "search", "agentic"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(filter_search_result, "feed", "filters", "search", "agentic")
+    assert "Feed Filter Topics for: agentic" in filter_search_result.output
+
 
 def test_cli_public_context_and_paper_reads_smoke(
     cli_runner,

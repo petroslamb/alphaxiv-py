@@ -165,6 +165,14 @@ class ExploreFilterOptions:
 
 
 @dataclass(slots=True)
+class FeedFilterSearchResults:
+    query: str
+    topics: list[str]
+    organizations: list[OrganizationResult]
+    raw: dict[str, Any] = field(repr=False)
+
+
+@dataclass(slots=True)
 class ResolvedPaper:
     input_id: str
     versionless_id: str | None

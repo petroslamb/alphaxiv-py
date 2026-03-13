@@ -78,23 +78,34 @@ organization matches when available.
 
 ```bash
 alphaxiv feed filters
+alphaxiv feed filters search "agentic"
 alphaxiv feed list --sort hot --limit 10
 alphaxiv feed list --sort likes --limit 5
 alphaxiv feed list --organization MIT --source twitter --interval 30-days --limit 5
 alphaxiv feed list --category computer-science --custom-category generative-models --limit 5
+alphaxiv feed list --topic agentic-frameworks --organization Meta --limit 5
+alphaxiv feed list --source github --sort most-stars --limit 5
 ```
 
-Supported `feed list` options mirror the public homepage as closely as the anonymous site allows:
+`feed filters search` mirrors the website filter drawer search box by querying live topic and
+organization filters.
 
-- `--sort hot|likes`
+Supported `feed list` options mirror the public homepage feed API:
+
+- `--sort hot|likes|github|twitter|most-stars|most-twitter-likes`
 - `--organization <name>` repeatable
 - `--menu-category "<homepage category>"` repeatable
 - `--category <slug>` repeatable
 - `--subcategory <slug>` repeatable
 - `--custom-category <slug>` repeatable
+- `--topic <slug-or-code>` repeatable
 - `--source github|twitter`
 - `--interval 3-days|7-days|30-days|90-days|all-time`
 - `--limit <n>`
+
+`--topic` is the closest match to the live website's internal feed filtering, because the site
+ultimately resolves many drawer selections down to raw topic values before calling
+`/papers/v3/feed`.
 
 ## Paper
 

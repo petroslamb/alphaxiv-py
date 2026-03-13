@@ -47,10 +47,12 @@ async with AlphaXivClient() as client:
 ```python
 async with AlphaXivClient() as client:
     options = await client.explore.filter_options()
+    search = await client.explore.search_filters("agentic")
     cards = await client.explore.feed(
-        sort="Likes",
+        sort="most-stars",
         organizations=("MIT",),
-        source="Twitter (X)",
+        topics=("agentic-frameworks",),
+        source="GitHub",
         limit=5,
     )
 ```

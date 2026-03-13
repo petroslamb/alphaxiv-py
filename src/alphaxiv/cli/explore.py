@@ -5,10 +5,10 @@ from __future__ import annotations
 import click
 from rich.table import Table
 
-from .._explore import FEED_SORTS
 from ..types import (
     ExploreFilterOptions,
     FeedCard,
+    FeedFilterSearchResults,
     HomepageSearchResults,
     OrganizationResult,
     SearchResult,
@@ -29,7 +29,15 @@ search = WrappedHelpGroup(
 
 feed = WrappedHelpGroup(
     "feed",
-    help="Inspect the public alphaXiv homepage feed and its available filters.",
+    help=(
+        "Inspect the public alphaXiv homepage feed, discover live filter values, "
+        "and list feed cards.\n\n"
+        "Examples:\n"
+        "  alphaxiv feed filters\n"
+        '  alphaxiv feed filters search "agentic"\n'
+        "  alphaxiv feed list --topic agentic-frameworks --organization Meta --limit 5\n"
+        "  alphaxiv feed list --source github --sort most-stars --limit 5"
+    ),
 )
 
 
@@ -73,6 +81,7 @@ def fetch_feed_cards(
     categories: tuple[str, ...],
     subcategories: tuple[str, ...],
     custom_categories: tuple[str, ...],
+    topics: tuple[str, ...],
     source: str | None,
     interval: str | None,
     limit: int | None,
@@ -86,6 +95,7 @@ def fetch_feed_cards(
                 categories=categories,
                 subcategories=subcategories,
                 custom_categories=custom_categories,
+                topics=topics,
                 source=source,
                 interval=interval,
                 limit=limit,
@@ -100,6 +110,14 @@ def fetch_filter_options() -> ExploreFilterOptions:
             return await client.explore.filter_options()
 
     return run_async(_filters())
+
+
+def fetch_feed_filter_search(query: str) -> FeedFilterSearchResults:
+    async def _search() -> FeedFilterSearchResults:
+        async with make_client() as client:
+            return await client.explore.search_filters(query)
+
+    return run_async(_search())
 
 
 def _render_papers_table(query: str, search_results: HomepageSearchResults) -> None:
@@ -141,6 +159,69 @@ def _render_organizations_table(
     console.print(table)
 
 
+def _render_filter_options(options: ExploreFilterOptions) -> None:
+    sorts_table = Table(title="Feed Sorts")
+    sorts_table.add_column("CLI Sort")
+    sorts_table.add_column("Meaning")
+    sorts_table.add_row("hot", "Homepage Hot feed")
+    sorts_table.add_row("likes", "Most liked feed")
+    sorts_table.add_row("most-stars", "GitHub feed sorted by stars")
+    sorts_table.add_row("most-twitter-likes", "Twitter feed sorted by X likes")
+    console.print(sorts_table)
+
+    categories_table = Table(title="Homepage Menu Categories")
+    categories_table.add_column("Value")
+    for item in options.menu_categories:
+        categories_table.add_row(item)
+    console.print(categories_table)
+
+    interval_table = Table(title="Publication Date Filters")
+    interval_table.add_column("Value")
+    for item in options.intervals:
+        interval_table.add_row(item)
+    console.print(interval_table)
+
+    source_table = Table(title="Feed Sources")
+    source_table.add_column("CLI Value")
+    source_table.add_column("Website Label")
+    source_table.add_row("github", "GitHub")
+    source_table.add_row("twitter", "Twitter (X)")
+    console.print(source_table)
+
+    organizations_table = Table(title="Top Organizations")
+    organizations_table.add_column("Name")
+    organizations_table.add_column("Slug")
+    for organization in options.organizations:
+        organizations_table.add_row(organization.name, organization.slug or "-")
+    console.print(organizations_table)
+
+    console.print(
+        "Use `alphaxiv feed filters search <query>` to discover live topic and organization filters "
+        "the same way the website's filter drawer search box does."
+    )
+
+
+def _render_filter_search(results: FeedFilterSearchResults) -> None:
+    if results.topics:
+        table = Table(title=f"Feed Filter Topics for: {results.query}")
+        table.add_column("Topic")
+        table.add_column("Use With")
+        for topic in results.topics:
+            table.add_row(topic, "--topic")
+        console.print(table)
+
+    if results.organizations:
+        table = Table(title=f"Feed Filter Organizations for: {results.query}")
+        table.add_column("Name")
+        table.add_column("Use With")
+        for organization in results.organizations:
+            table.add_row(organization.name, "--organization")
+        console.print(table)
+
+    if not results.topics and not results.organizations:
+        console.print(f"No live feed filters found for query: {results.query}")
+
+
 @search.command("all")
 @click.argument("query")
 def search_all(query: str) -> None:
@@ -180,7 +261,10 @@ def search_topics(query: str) -> None:
 @feed.command("list")
 @click.option(
     "--sort",
-    type=click.Choice([item.lower() for item in FEED_SORTS], case_sensitive=False),
+    type=click.Choice(
+        ["hot", "likes", "github", "twitter", "most-stars", "most-twitter-likes"],
+        case_sensitive=False,
+    ),
     default="hot",
     show_default=True,
 )
@@ -205,6 +289,12 @@ def search_topics(query: str) -> None:
     help="Filter by custom category topic slug.",
 )
 @click.option(
+    "--topic",
+    "topics",
+    multiple=True,
+    help="Filter by a raw feed topic slug/code from `feed filters search`.",
+)
+@click.option(
     "--source",
     type=click.Choice(["github", "twitter"], case_sensitive=False),
     default=None,
@@ -224,18 +314,12 @@ def list_feed(
     categories: tuple[str, ...],
     subcategories: tuple[str, ...],
     custom_categories: tuple[str, ...],
+    topics: tuple[str, ...],
     source: str | None,
     interval: str | None,
     limit: int,
 ) -> None:
     """List public homepage feed cards using alphaXiv-style filters."""
-    source_value = None
-    if source == "github":
-        source_value = "GitHub"
-    elif source == "twitter":
-        source_value = "Twitter (X)"
-
-    interval_value = interval.replace("-", " ").title() if interval else None
     cards = fetch_feed_cards(
         sort=sort,
         organizations=organizations,
@@ -243,8 +327,9 @@ def list_feed(
         categories=categories,
         subcategories=subcategories,
         custom_categories=custom_categories,
-        source=source_value,
-        interval=interval_value,
+        topics=topics,
+        source=source,
+        interval=interval,
         limit=limit,
     )
 
@@ -277,38 +362,29 @@ def list_feed(
     console.print(table)
 
 
-@feed.command("filters")
-def show_filter_options() -> None:
+@click.group(
+    "filters",
+    cls=WrappedHelpGroup,
+    invoke_without_command=True,
+    help=(
+        "Show the current feed filter groups and search live topic/organization filter values.\n\n"
+        "Examples:\n"
+        "  alphaxiv feed filters\n"
+        '  alphaxiv feed filters search "agentic"'
+    ),
+)
+@click.pass_context
+def feed_filters(ctx: click.Context) -> None:
     """Show the current feed sorts, filters, sources, and top organizations."""
-    options = fetch_filter_options()
+    if ctx.invoked_subcommand is None:
+        _render_filter_options(fetch_filter_options())
 
-    sorts_table = Table(title="Feed Sorts")
-    sorts_table.add_column("Value")
-    for item in options.sorts:
-        sorts_table.add_row(item)
-    console.print(sorts_table)
 
-    categories_table = Table(title="Homepage Menu Categories")
-    categories_table.add_column("Value")
-    for item in options.menu_categories:
-        categories_table.add_row(item)
-    console.print(categories_table)
+@feed_filters.command("search")
+@click.argument("query")
+def search_feed_filters(query: str) -> None:
+    """Search live topic and organization filters like the website's filter drawer."""
+    _render_filter_search(fetch_feed_filter_search(query))
 
-    interval_table = Table(title="Publication Date Filters")
-    interval_table.add_column("Value")
-    for item in options.intervals:
-        interval_table.add_row(item)
-    console.print(interval_table)
 
-    source_table = Table(title="Feed Sources")
-    source_table.add_column("Value")
-    for item in options.sources:
-        source_table.add_row(item)
-    console.print(source_table)
-
-    organizations_table = Table(title="Top Organizations")
-    organizations_table.add_column("Name")
-    organizations_table.add_column("Slug")
-    for organization in options.organizations:
-        organizations_table.add_row(organization.name, organization.slug or "-")
-    console.print(organizations_table)
+feed.add_command(feed_filters)

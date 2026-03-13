@@ -16,7 +16,7 @@ from tests.fixtures import (
     COMMENT_REPLY_RESPONSE,
     COMMENT_UPVOTE_RESPONSE,
     COMMENTS_PAYLOAD,
-    EXPLORE_FEED_HTML,
+    EXPLORE_FEED_PAYLOAD,
     FOLDERS_PAYLOAD,
     FULL_TEXT_PAYLOAD,
     LEGACY_PAYLOAD,
@@ -97,8 +97,13 @@ async def test_homepage_search_and_feed(httpx_mock) -> None:
     )
     httpx_mock.add_response(
         method="GET",
-        url="https://www.alphaxiv.org?sort=Hot&organizations=%5B%22MIT%22%5D&source=Twitter+%28X%29",
-        text=EXPLORE_FEED_HTML,
+        url=(
+            "https://api.alphaxiv.org/papers/v3/feed?pageNum=0&pageSize=20&sort=Hot"
+            "&interval=All+time&organizations=%5B%22MIT%22%5D"
+            "&categories=%5B%22computer-science%22%5D"
+            "&subcategories=%5B%22machine-learning%22%5D&source=Twitter+%28X%29"
+        ),
+        json=EXPLORE_FEED_PAYLOAD,
     )
 
     async with AlphaXivClient() as client:
@@ -107,16 +112,37 @@ async def test_homepage_search_and_feed(httpx_mock) -> None:
         cards = await client.explore.feed(
             sort="Hot",
             organizations=("MIT",),
-            categories=("machine-learning",),
+            categories=("computer-science",),
+            subcategories=("machine-learning",),
             source="Twitter (X)",
         )
 
     assert results.organizations[0].name == "MIT"
     assert results.topics == ["deep-reinforcement-learning", "reinforcement-learning"]
     assert filters.organizations[0].slug == "mit"
-    assert len(cards) == 1
-    assert cards[0].paper_id == "2512.24601"
-    assert cards[0].x_likes == 325
+    assert len(cards) == 2
+    assert cards[1].paper_id == "2512.24601"
+    assert cards[1].x_likes == 325
+
+
+@pytest.mark.asyncio
+async def test_feed_filter_search(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/v1/search/closest-topic?input=agentic",
+        json={"data": ["agentic-frameworks", "agents"]},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/organizations/v2/search?q=agentic",
+        json=ORGANIZATION_SEARCH_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        results = await client.explore.search_filters("agentic")
+
+    assert results.topics == ["agentic-frameworks", "agents"]
+    assert results.organizations[0].name == "MIT"
 
 
 @pytest.mark.asyncio

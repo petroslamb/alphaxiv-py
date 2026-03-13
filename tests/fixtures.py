@@ -365,6 +365,73 @@ URL_METADATA_PAYLOAD = {
 PAPER_VIEW_RESPONSE = {"ok": True, "recorded": True}
 PAPER_VOTE_RESPONSE = {"ok": True, "toggled": True}
 COMMENT_UPVOTE_RESPONSE = {"ok": True, "toggled": True}
+EXPLORE_FEED_PAYLOAD = {
+    "papers": [
+        {
+            "id": "group-helios",
+            "paper_group_id": "group-helios",
+            "title": "Helios: Real Real-Time Long Video Generation Model",
+            "abstract": "We introduce Helios.",
+            "paper_summary": {"summary": "Helios summary", "results": ["19.53 FPS"]},
+            "image_url": "image/2603.04379v1.png",
+            "universal_paper_id": "2603.04379",
+            "metrics": {
+                "visits_count": {"all": 2974, "last_7_days": 2974},
+                "total_votes": 39,
+                "public_total_votes": 107,
+                "x_likes": 0,
+            },
+            "first_publication_date": "2026-03-04T18:45:21.000Z",
+            "publication_date": "2026-03-04T18:45:21.000Z",
+            "updated_at": "2026-03-05T03:23:51.964Z",
+            "topics": ["Computer Science", "cs.CV", "generative-models"],
+            "organization_info": [],
+            "authors": ["Shenghai Yuan", "Yuanyang Yin", "Zongjian Li"],
+            "full_authors": [{"id": "author-1", "full_name": "Shenghai Yuan", "verified": False}],
+            "author_info": [],
+            "github_stars": 235,
+            "github_url": "https://github.com/PKU-YuanGroup/Helios",
+            "canonical_id": "2603.04379v1",
+            "version_id": "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+        },
+        {
+            "id": "group-rlm",
+            "paper_group_id": "group-rlm",
+            "title": "Recursive Language Models",
+            "abstract": "A new model family.",
+            "paper_summary": {"summary": "RLM summary", "results": ["325 X likes"]},
+            "image_url": "image/2512.24601v1.png",
+            "universal_paper_id": "2512.24601",
+            "metrics": {
+                "visits_count": {"all": 1200, "last_7_days": 800},
+                "total_votes": 188,
+                "public_total_votes": 514,
+                "x_likes": 325,
+            },
+            "first_publication_date": "2025-12-20T08:00:00.000Z",
+            "publication_date": "2025-12-20T08:00:00.000Z",
+            "updated_at": "2025-12-21T08:00:00.000Z",
+            "topics": ["Computer Science", "machine-learning", "artificial-intelligence"],
+            "organization_info": [
+                {"name": "MIT", "image": "images/organizations/mit.png"},
+                {"name": "Meta", "image": "images/organizations/meta.png"},
+            ],
+            "authors": ["Andrew McCallum", "Dhiraj Gandhi"],
+            "full_authors": [{"id": "author-2", "full_name": "Andrew McCallum", "verified": False}],
+            "author_info": [],
+            "github_stars": 165,
+            "github_url": "https://github.com/example/rlm",
+            "canonical_id": "2512.24601v1",
+            "version_id": "version-rlm",
+        },
+    ],
+    "page": {
+        "pageNum": 0,
+        "pageSize": 20,
+        "totalPages": 1,
+        "totalCount": 2,
+    },
+}
 
 EXPLORE_FEED_HTML = """
 <html>

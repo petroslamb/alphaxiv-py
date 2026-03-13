@@ -1,17 +1,15 @@
-"""Homepage explore/feed APIs."""
+"""Homepage search and feed APIs."""
 
 from __future__ import annotations
 
-import ast
+import asyncio
 import json
 import re
-from datetime import UTC, datetime, timedelta
 
-from ._core import BASE_API_URL, BASE_WEB_URL, ClientCore
-from .exceptions import APIError
-from .types import ExploreFilterOptions, FeedCard, OrganizationResult
+from ._core import BASE_API_URL, ClientCore
+from .types import ExploreFilterOptions, FeedCard, FeedFilterSearchResults, OrganizationResult
 
-FEED_SORTS = ("Hot", "Likes")
+FEED_SORTS = ("Hot", "Likes", "GitHub", "Twitter (X)")
 FEED_MENU_CATEGORIES = (
     "AI & Machine Learning",
     "Computer Science",
@@ -24,210 +22,82 @@ FEED_MENU_CATEGORIES = (
 FEED_INTERVALS = ("3 Days", "7 Days", "30 Days", "90 Days", "All time")
 FEED_SOURCES = ("GitHub", "Twitter (X)")
 
-_REF_ASSIGN_RE = re.compile(r"\$R\[\d+\]=")
-_REF_RE = re.compile(r"\$R\[(\d+)\]")
-_STRING_RE = re.compile(r'("(?:[^"\\]|\\.)*")')
-_KEY_RE = re.compile(r"([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)")
-
-_INTERVAL_TO_DAYS = {
-    "3 days": 3,
-    "7 days": 7,
-    "30 days": 30,
-    "90 days": 90,
-    "all time": None,
-}
-_MENU_CATEGORY_TO_TOPICS = {
-    "ai & machine learning": {"artificial-intelligence", "machine-learning"},
-    "computer science": {"computer-science"},
-    "mathematics": {"mathematics"},
-    "physics": {"physics"},
-    "statistics": {"statistics"},
-    "electrical engineering": {"electrical-engineering"},
-    "economics": {"economics"},
-}
-
 
 def _normalize_token(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
-def _normalize_sort(value: str | None) -> str:
+def _normalize_sort(value: str | None) -> tuple[str, str | None]:
     if not value:
-        return "Hot"
-    normalized = value.strip().lower()
-    if normalized not in {"hot", "likes"}:
-        raise ValueError(f"Unsupported feed sort '{value}'. Expected Hot or Likes.")
-    return normalized.title()
+        return "Hot", None
+
+    normalized = _normalize_token(value)
+    if normalized == "hot":
+        return "Hot", None
+    if normalized == "likes":
+        return "Likes", None
+    if normalized in {"github", "most-stars", "stars"}:
+        return "GitHub", "GitHub"
+    if normalized in {"twitter", "twitter-x", "most-twitter-likes", "most-twitter-x-likes"}:
+        return "Twitter (X)", "Twitter (X)"
+
+    raise ValueError(
+        "Unsupported feed sort "
+        f"'{value}'. Expected one of: hot, likes, github, twitter, most-stars, "
+        "most-twitter-likes."
+    )
 
 
 def _normalize_source(value: str | None) -> str | None:
     if not value:
         return None
+
     normalized = _normalize_token(value)
     if normalized == "github":
         return "GitHub"
     if normalized in {"twitter-x", "twitter"}:
         return "Twitter (X)"
+
     raise ValueError(f"Unsupported feed source '{value}'. Expected GitHub or Twitter (X).")
 
 
-def _normalize_interval(value: str | None) -> str | None:
+def _normalize_interval(value: str | None) -> str:
     if not value:
-        return None
+        return "All time"
+
     normalized = value.replace("-", " ").strip().lower()
-    if normalized not in _INTERVAL_TO_DAYS:
-        raise ValueError(
-            f"Unsupported interval '{value}'. Expected one of: {', '.join(FEED_INTERVALS)}."
-        )
     for option in FEED_INTERVALS:
         if option.lower() == normalized:
             return option
-    return None
+
+    raise ValueError(
+        f"Unsupported interval '{value}'. Expected one of: {', '.join(FEED_INTERVALS)}."
+    )
 
 
-def _extract_balanced(text: str, start: int, open_char: str, close_char: str) -> str:
-    in_string = False
-    escaped = False
-    depth = 0
-    for index, char in enumerate(text[start:], start=start):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            continue
-        if char == open_char:
-            depth += 1
-            continue
-        if char == close_char:
-            depth -= 1
-            if depth == 0:
-                return text[start : index + 1]
-    raise ValueError("Could not find balanced serialized payload.")
+def _normalize_menu_category(value: str) -> str:
+    return _normalize_token(value.strip())
 
 
-def _to_python_literal(serialized: str) -> str:
-    text = _REF_ASSIGN_RE.sub("", serialized)
-    text = _REF_RE.sub(r"\1", text)
-
-    parts = _STRING_RE.split(text)
-    for index in range(0, len(parts), 2):
-        part = parts[index]
-        part = part.replace("!0", "True").replace("!1", "False").replace("void 0", "None")
-        part = re.sub(r"\btrue\b", "True", part)
-        part = re.sub(r"\bfalse\b", "False", part)
-        part = re.sub(r"\bnull\b", "None", part)
-        parts[index] = _KEY_RE.sub(r'\1"\2"\3', part)
-    return "".join(parts)
+def _normalize_filter_slug(value: str) -> str:
+    return _normalize_token(value.strip())
 
 
-def _extract_trending_payload(html: str) -> list[dict[str, object]]:
-    marker = "trendingPapers:"
-    start = html.find(marker)
-    if start == -1:
-        raise ValueError("Could not find the explore feed payload in the page HTML.")
-
-    assign_index = html.find("=", start)
-    if assign_index == -1:
-        raise ValueError("Could not find the explore feed payload assignment in the page HTML.")
-
-    array_start = html.find("[", assign_index)
-    if array_start == -1:
-        raise ValueError("Could not find the explore feed payload array in the page HTML.")
-
-    serialized = _extract_balanced(html, array_start, "[", "]")
-    python_literal = _to_python_literal(serialized)
-    payload = ast.literal_eval(python_literal)
-    if not isinstance(payload, list):
-        raise ValueError("Explore feed payload was not a list.")
-    return [item for item in payload if isinstance(item, dict)]
+def _normalize_raw_topic(value: str) -> str:
+    stripped = value.strip()
+    if re.fullmatch(r"[A-Za-z]+\.[A-Za-z0-9-]+", stripped):
+        return stripped
+    return _normalize_token(stripped)
 
 
-def _matches_topics(card: FeedCard, filters: tuple[str, ...]) -> bool:
-    if not filters:
-        return True
-    available = {_normalize_token(topic) for topic in card.topics}
-    expected = {_normalize_token(item) for item in filters}
-    return not expected.isdisjoint(available)
-
-
-def _matches_menu_categories(card: FeedCard, filters: tuple[str, ...]) -> bool:
-    if not filters:
-        return True
-    available = {_normalize_token(topic) for topic in card.topics}
-    for item in filters:
-        mapped = _MENU_CATEGORY_TO_TOPICS.get(item.strip().lower())
-        if not mapped:
-            continue
-        if available.intersection(mapped):
-            return True
-    return False
-
-
-def _matches_organizations(card: FeedCard, filters: tuple[str, ...]) -> bool:
-    if not filters:
-        return True
-    available = {_normalize_token(item) for item in card.organizations}
-    expected = {_normalize_token(item) for item in filters}
-    return not expected.isdisjoint(available)
-
-
-def _matches_source(card: FeedCard, source: str | None) -> bool:
-    if not source:
-        return True
-    if source == "GitHub":
-        return bool(card.github_url)
-    if source == "Twitter (X)":
-        return card.x_likes > 0
-    return True
-
-
-def _matches_interval(card: FeedCard, interval: str | None) -> bool:
-    if not interval or interval == "All time":
-        return True
-    days = _INTERVAL_TO_DAYS[interval.lower()]
-    if days is None:
-        return True
-    if card.publication_date is None:
-        return False
-    now = datetime.now(UTC)
-    published = card.publication_date
-    if published.tzinfo is None:
-        published = published.replace(tzinfo=UTC)
-    return published >= now - timedelta(days=days)
-
-
-def _apply_local_filters(
-    cards: list[FeedCard],
-    *,
-    organizations: tuple[str, ...],
-    menu_categories: tuple[str, ...],
-    categories: tuple[str, ...],
-    subcategories: tuple[str, ...],
-    custom_categories: tuple[str, ...],
-    source: str | None,
-    interval: str | None,
-) -> list[FeedCard]:
-    filtered: list[FeedCard] = []
-    topic_filters = categories + subcategories + custom_categories
-    for card in cards:
-        if not _matches_organizations(card, organizations):
-            continue
-        if not _matches_menu_categories(card, menu_categories):
-            continue
-        if not _matches_topics(card, topic_filters):
-            continue
-        if not _matches_source(card, source):
-            continue
-        if not _matches_interval(card, interval):
-            continue
-        filtered.append(card)
-    return filtered
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            ordered.append(value)
+    return ordered
 
 
 class ExploreAPI:
@@ -253,6 +123,42 @@ class ExploreAPI:
             raw={"organizations": [item.raw for item in organizations]},
         )
 
+    async def search_filters(self, query: str) -> FeedFilterSearchResults:
+        topic_payload, organization_payload = await asyncio.gather(
+            self._core.get_json(
+                f"{BASE_API_URL}/v1/search/closest-topic",
+                params={"input": query},
+            ),
+            self._core.get_json(
+                f"{BASE_API_URL}/organizations/v2/search",
+                params={"q": query},
+            ),
+        )
+
+        topics: list[str] = []
+        if isinstance(topic_payload, dict):
+            data = topic_payload.get("data")
+            if isinstance(data, list):
+                topics = [str(item) for item in data if isinstance(item, str)]
+
+        organizations: list[OrganizationResult] = []
+        if isinstance(organization_payload, list):
+            organizations = [
+                OrganizationResult.from_payload(item)
+                for item in organization_payload
+                if isinstance(item, dict)
+            ]
+
+        return FeedFilterSearchResults(
+            query=query,
+            topics=topics,
+            organizations=organizations,
+            raw={
+                "topics": topic_payload,
+                "organizations": organization_payload,
+            },
+        )
+
     async def feed(
         self,
         *,
@@ -262,43 +168,65 @@ class ExploreAPI:
         categories: tuple[str, ...] = (),
         subcategories: tuple[str, ...] = (),
         custom_categories: tuple[str, ...] = (),
+        topics: tuple[str, ...] = (),
         source: str | None = None,
         interval: str | None = None,
         limit: int | None = None,
     ) -> list[FeedCard]:
-        canonical_sort = _normalize_sort(sort)
+        canonical_sort, implied_source = _normalize_sort(sort)
         canonical_source = _normalize_source(source)
-        canonical_interval = _normalize_interval(interval)
+        if implied_source:
+            if canonical_source and canonical_source != implied_source:
+                raise ValueError(
+                    f"Feed sort '{sort}' requires source '{implied_source}', not '{canonical_source}'."
+                )
+            canonical_source = implied_source
 
-        params: dict[str, str] = {"sort": canonical_sort}
+        page_size = limit or 20
+        params: dict[str, str | int] = {
+            "pageNum": 0,
+            "pageSize": page_size,
+            "sort": canonical_sort,
+            "interval": _normalize_interval(interval),
+        }
+
         if organizations:
-            params["organizations"] = json.dumps(list(organizations))
+            params["organizations"] = json.dumps([item.strip() for item in organizations if item.strip()])
+
+        category_filters = _dedupe(
+            [_normalize_menu_category(item) for item in menu_categories]
+            + [_normalize_filter_slug(item) for item in categories]
+        )
+        if category_filters:
+            params["categories"] = json.dumps(category_filters)
+
+        subcategory_filters = _dedupe([_normalize_filter_slug(item) for item in subcategories])
+        if subcategory_filters:
+            params["subcategories"] = json.dumps(subcategory_filters)
+
+        custom_category_filters = _dedupe(
+            [_normalize_filter_slug(item) for item in custom_categories]
+        )
+        if custom_category_filters:
+            params["customCategories"] = json.dumps(custom_category_filters)
+
+        topic_filters = _dedupe([_normalize_raw_topic(item) for item in topics])
+        if topic_filters:
+            params["topics"] = json.dumps(topic_filters)
+
         if canonical_source:
             params["source"] = canonical_source
-        if canonical_interval and canonical_interval != "All time":
-            params["interval"] = canonical_interval
 
-        html = await self._core.get_text(BASE_WEB_URL, params=params)
-        try:
-            payload = _extract_trending_payload(html)
-        except (SyntaxError, ValueError) as exc:
-            raise APIError(
-                "Could not parse the alphaXiv explore feed payload.",
-                url=BASE_WEB_URL,
-                response_text=html[:1000],
-            ) from exc
+        payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/feed", params=params)
+        papers_payload: list[dict[str, object]] = []
+        if isinstance(payload, dict):
+            papers = payload.get("papers")
+            if isinstance(papers, list):
+                papers_payload = [item for item in papers if isinstance(item, dict)]
+        elif isinstance(payload, list):
+            papers_payload = [item for item in payload if isinstance(item, dict)]
 
-        cards = [FeedCard.from_payload(item) for item in payload]
-        filtered = _apply_local_filters(
-            cards,
-            organizations=organizations,
-            menu_categories=menu_categories,
-            categories=categories,
-            subcategories=subcategories,
-            custom_categories=custom_categories,
-            source=canonical_source,
-            interval=canonical_interval,
-        )
+        cards = [FeedCard.from_payload(item) for item in papers_payload]
         if limit is not None:
-            return filtered[:limit]
-        return filtered
+            return cards[:limit]
+        return cards

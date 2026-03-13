@@ -11,6 +11,7 @@ from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.types import (
     CommentAuthor,
     FeedCard,
+    FeedFilterSearchResults,
     Folder,
     FolderPaper,
     HomepageSearchResults,
@@ -200,6 +201,29 @@ def test_feed_list_renders_cards(monkeypatch) -> None:
     assert "alphaXiv Feed" in result.output
     assert "2603.04379" in result.output
     assert "107" in result.output
+
+
+def test_feed_filters_search_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        explore_cli,
+        "fetch_feed_filter_search",
+        lambda _query: FeedFilterSearchResults(
+            query="agentic",
+            topics=["agentic-frameworks", "agents"],
+            organizations=[
+                OrganizationResult(id="org-meta", name="Meta", image=None, slug="meta", raw={})
+            ],
+            raw={},
+        ),
+    )
+
+    result = runner.invoke(cli, ["feed", "filters", "search", "agentic"])
+    assert result.exit_code == 0
+    assert "Feed Filter Topics for: agentic" in result.output
+    assert "agentic-frameworks" in result.output
+    assert "--topic" in result.output
+    assert "Meta" in result.output
 
 
 def _comment_fixture() -> list[PaperComment]:

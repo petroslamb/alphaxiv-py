@@ -70,8 +70,10 @@ alphaxiv assistant start --model "GPT 5.4" "Find papers on agent frameworks"
 alphaxiv assistant reply "Focus on the most cited ones"
 alphaxiv assistant history
 alphaxiv feed filters
+alphaxiv feed filters search "agentic"
 alphaxiv feed list --sort likes --limit 5
 alphaxiv feed list --organization MIT --source twitter --limit 5
+alphaxiv feed list --topic agentic-frameworks --organization Meta --limit 5
 alphaxiv paper show
 alphaxiv paper abstract
 alphaxiv paper summary
@@ -116,7 +118,15 @@ async def main() -> None:
         topics = await client.search.closest_topics("graph neural networks for molecules")
         print(papers[0].paper_id, organizations[0].name, topics[0])
 
-        cards = await client.explore.feed(sort="Likes", limit=3)
+        filter_search = await client.explore.search_filters("agentic")
+        print(filter_search.topics[:2], [item.name for item in filter_search.organizations[:2]])
+
+        cards = await client.explore.feed(
+            sort="most-stars",
+            source="GitHub",
+            topics=("agentic-frameworks",),
+            limit=3,
+        )
         print(cards[0].paper_id, cards[0].upvotes)
 
         paper = await client.papers.get("2603.04379")
