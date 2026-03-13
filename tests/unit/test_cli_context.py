@@ -17,7 +17,6 @@ from alphaxiv.paths import (
     get_api_key_path,
     get_assistant_context_path,
     get_context_path,
-    get_legacy_auth_path,
 )
 from alphaxiv.types import (
     AssistantContext,
@@ -91,7 +90,7 @@ def test_auth_set_api_key_prompts_when_flag_missing(monkeypatch, tmp_path) -> No
     assert loaded.api_key == "axv1_test-token"
 
 
-def test_auth_clear_command_removes_saved_and_legacy_auth(monkeypatch, tmp_path) -> None:
+def test_auth_clear_command_removes_saved_api_key(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
     save_api_key(
@@ -101,16 +100,12 @@ def test_auth_clear_command_removes_saved_and_legacy_auth(monkeypatch, tmp_path)
             saved_at=datetime(2026, 3, 11, tzinfo=UTC),
         )
     )
-    legacy_auth_path = get_legacy_auth_path()
-    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
 
     result = runner.invoke(cli, ["auth", "clear"])
 
     assert result.exit_code == 0
-    assert "Removed local alphaXiv auth files" in result.output
+    assert "Removed local alphaXiv API key" in result.output
     assert not get_api_key_path().exists()
-    assert not legacy_auth_path.exists()
 
 
 def test_auth_status_shows_saved_api_key_without_model(monkeypatch, tmp_path) -> None:
@@ -133,19 +128,6 @@ def test_auth_status_shows_saved_api_key_without_model(monkeypatch, tmp_path) ->
     assert "axv1_test-token" not in status.output
     assert "axv1_test-to" in status.output
     assert "Preferred Model" not in status.output
-
-
-def test_auth_status_warns_about_legacy_auth(monkeypatch, tmp_path) -> None:
-    runner = CliRunner()
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    legacy_auth_path = get_legacy_auth_path()
-    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
-
-    status = runner.invoke(cli, ["auth", "status"])
-
-    assert status.exit_code == 0
-    assert "Legacy auth.json found but ignored" in status.output
 
 
 def test_context_use_paper_and_show(monkeypatch, tmp_path) -> None:

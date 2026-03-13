@@ -31,11 +31,6 @@ def get_api_key_path() -> Path:
     return get_home_path() / "api-key.json"
 
 
-def get_legacy_auth_path() -> Path:
-    """Return the legacy saved auth.json path from older browser-token versions."""
-    return get_home_path() / "auth.json"
-
-
 def ensure_home_path() -> Path:
     """Create and return the base config directory."""
     path = get_home_path()

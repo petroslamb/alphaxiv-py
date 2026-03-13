@@ -23,13 +23,40 @@ def test_cli_public_search_and_feed_smoke(
     assert "Paper Search Results for: attention is all you need" in search_result.output
     assert SMOKE_PAPER_ID in search_result.output
 
-    feed_result = invoke_cli(
+    filters_result = invoke_cli(
+        cli_runner,
+        ["feed", "filters"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(filters_result, "feed", "filters")
+    assert "Feed Sorts" in filters_result.output
+    assert "Feed Sources" in filters_result.output
+
+    hot_feed_result = invoke_cli(
         cli_runner,
         ["feed", "list", "--sort", "hot", "--limit", "1"],
         env=isolated_cli_env,
     )
-    assert_cli_ok(feed_result, "feed", "list", "--sort", "hot", "--limit", "1")
-    assert "alphaXiv Feed" in feed_result.output
+    assert_cli_ok(hot_feed_result, "feed", "list", "--sort", "hot", "--limit", "1")
+    assert "alphaXiv Feed" in hot_feed_result.output
+
+    github_feed_result = invoke_cli(
+        cli_runner,
+        ["feed", "list", "--sort", "most-stars", "--source", "github", "--limit", "1"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(
+        github_feed_result,
+        "feed",
+        "list",
+        "--sort",
+        "most-stars",
+        "--source",
+        "github",
+        "--limit",
+        "1",
+    )
+    assert "alphaXiv Feed" in github_feed_result.output
 
     filter_search_result = invoke_cli(
         cli_runner,

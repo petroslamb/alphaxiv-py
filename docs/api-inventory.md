@@ -39,6 +39,7 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/v1/search/closest-topic?input=...` | public | Topic suggestion endpoint used by homepage search. | yes |
 | `GET` | `/organizations/v2/search?q=...` | public | Organization search for labs, universities, and companies. | yes |
 | `GET` | `/organizations/v2/top` | public | Top organizations list used by homepage filtering UI. | yes |
+| `GET` | `/papers/v3/feed?...` | public | Homepage feed cards with sort and filter parameters. | yes |
 
 ### Papers
 
@@ -98,7 +99,7 @@ These are not under `api.alphaxiv.org`, but they are part of the product surface
 These are the endpoint groups currently wired into the SDK and CLI:
 
 - Search: `/search/v2/paper/fast`, `/v1/search/closest-topic`, `/organizations/v2/search`
-- Feed support: `/organizations/v2/top`
+- Feed support: `/organizations/v2/top`, `/papers/v3/feed`
 - Papers: `/papers/v3/legacy/{id}`, `/papers/v3/legacy/{paperGroupId}/comments`, `/papers/v2/{paperVersionId}/comment`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/x-mentions-db/{paperGroupId}`, `/papers/v3/{paperGroupId}/view`, `/papers/v3/{paperId}/similar-papers`, `/v2/papers/{paperId}/vote`
 - Assistant: `/assistant/v2?variant=homepage`, `/assistant/v2?variant=paper&paperVersion=...`, `/assistant/v2/{sessionId}/messages`, `/assistant/v2/chat`, `/assistant/v2/url-metadata`
 - Auth and preferences: `/users/v3`, `/users/v3/preferences`, `/folders/v3`, `/comments/v2/{commentId}/upvote`, `/comments/v2/{commentId}`
@@ -106,7 +107,7 @@ These are the endpoint groups currently wired into the SDK and CLI:
 
 ## Notes
 
-- The homepage paper feed is largely server-rendered on `www.alphaxiv.org`, with API support from endpoints like `/organizations/v2/top`.
+- The homepage feed is available through `/papers/v3/feed`, while `/organizations/v2/top` supplies filter UI defaults such as top organizations.
 - `PATCH /users/v3/preferences` appears broader than model selection alone; the web UI uses it for other assistant-pane preferences too.
 - `/papers/v3/{paperId}/similar-papers` returns noisy variants for some papers, including malformed or duplicate IDs. Any client support should canonicalize those results before surfacing them.
 - `POST /papers/v2/{paperVersionId}/comment` supports both top-level comments and replies. The web payload also contains annotation fields, but the current SDK/CLI intentionally expose only text fields in v1.

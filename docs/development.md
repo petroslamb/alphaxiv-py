@@ -22,7 +22,7 @@ Live smoke layers:
 
 ## Public vs Authenticated Scope
 
-This codebase intentionally supports only public alphaXiv endpoints in v1.
-Assistant/chat endpoints require an alphaXiv API key. The SDK implements the authenticated `assistant/v2` flow directly over HTTP + SSE and no longer depends on browser automation.
+This codebase intentionally targets direct HTTP access to alphaXiv's public and API-key-authenticated endpoints.
+Authenticated assistant, folder, and comment-mutation endpoints require an alphaXiv API key. The SDK implements those flows directly over HTTP + SSE and no longer depends on browser automation.
 
 All live smoke tests use a temporary `ALPHAXIV_HOME`, so they do not read from or write to the operator's real local CLI state.

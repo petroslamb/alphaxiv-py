@@ -10,6 +10,7 @@ from click.testing import CliRunner
 from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.types import (
     CommentAuthor,
+    ExploreFilterOptions,
     FeedCard,
     FeedFilterSearchResults,
     Folder,
@@ -201,6 +202,30 @@ def test_feed_list_renders_cards(monkeypatch) -> None:
     assert "alphaXiv Feed" in result.output
     assert "2603.04379" in result.output
     assert "107" in result.output
+
+
+def test_feed_filters_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        explore_cli,
+        "fetch_filter_options",
+        lambda: ExploreFilterOptions(
+            sorts=["Hot", "Likes", "GitHub", "Twitter (X)"],
+            menu_categories=["Computer Science"],
+            intervals=["7 Days", "All time"],
+            sources=["GitHub", "Twitter (X)"],
+            organizations=[
+                OrganizationResult(id="org-mit", name="MIT", image=None, slug="mit", raw={})
+            ],
+            raw={},
+        ),
+    )
+
+    result = runner.invoke(cli, ["feed", "filters"])
+    assert result.exit_code == 0
+    assert "Feed Sorts" in result.output
+    assert "Feed Sources" in result.output
+    assert "MIT" in result.output
 
 
 def test_feed_filters_search_command(monkeypatch) -> None:

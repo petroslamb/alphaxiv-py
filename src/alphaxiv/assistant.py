@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from ._core import BASE_API_URL, ClientCore
 from ._papers import PapersAPI
-from .exceptions import APIError, AlphaXivError, AuthRequiredError, ResolutionError
+from .exceptions import AlphaXivError, APIError, AuthRequiredError, ResolutionError
 from .types import (
     AssistantMessage,
     AssistantRun,
@@ -286,7 +286,7 @@ class AssistantAPI:
         normalized = cleaned.lower().replace(" ", "-")
         for prefix, replacement in ASSISTANT_MODEL_PREFIX_REWRITES.items():
             if normalized.startswith(prefix):
-                return f"{replacement}{normalized[len(prefix):]}"
+                return f"{replacement}{normalized[len(prefix) :]}"
         return normalized
 
     async def _latest_parent_message_id(self, session_id: str) -> str | None:

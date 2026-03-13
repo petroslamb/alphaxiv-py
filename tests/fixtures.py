@@ -433,61 +433,6 @@ EXPLORE_FEED_PAYLOAD = {
     },
 }
 
-EXPLORE_FEED_HTML = """
-<html>
-  <body>
-    <script>
-      trendingPapers:$R[10]=[
-        $R[11]={
-          id:"group-helios",
-          paper_group_id:"group-helios",
-          title:"Helios: Real Real-Time Long Video Generation Model",
-          abstract:"We introduce Helios.",
-          paper_summary:$R[12]={summary:"Helios summary",bullets:$R[13]=["Fast"],results:$R[14]=["19.53 FPS"]},
-          image_url:"image/2603.04379v1.png",
-          universal_paper_id:"2603.04379",
-          metrics:$R[15]={visits_count:$R[16]={all:2974,last_7_days:2974},total_votes:39,public_total_votes:107,x_likes:0},
-          first_publication_date:"2026-03-04T18:45:21.000Z",
-          publication_date:"2026-03-04T18:45:21.000Z",
-          updated_at:"2026-03-05T03:23:51.964Z",
-          topics:$R[17]=["Computer Science","cs.CV","generative-models"],
-          organization_info:$R[18]=[],
-          authors:$R[19]=["Shenghai Yuan","Yuanyang Yin","Zongjian Li"],
-          full_authors:$R[20]=[$R[21]={id:"author-1",full_name:"Shenghai Yuan",verified:!1}],
-          author_info:$R[22]=[],
-          github_stars:235,
-          github_url:"https://github.com/PKU-YuanGroup/Helios",
-          canonical_id:"2603.04379v1",
-          version_id:"019cbc05-f158-7e3a-b9c1-a43274c0130b"
-        },
-        $R[23]={
-          id:"group-rlm",
-          paper_group_id:"group-rlm",
-          title:"Recursive Language Models",
-          abstract:"A new model family.",
-          paper_summary:$R[24]={summary:"RLM summary",bullets:$R[25]=["Reasoning"],results:$R[26]=["325 X likes"]},
-          image_url:"image/2512.24601v1.png",
-          universal_paper_id:"2512.24601",
-          metrics:$R[27]={visits_count:$R[28]={all:1200,last_7_days:800},total_votes:188,public_total_votes:514,x_likes:325},
-          first_publication_date:"2025-12-20T08:00:00.000Z",
-          publication_date:"2025-12-20T08:00:00.000Z",
-          updated_at:"2025-12-21T08:00:00.000Z",
-          topics:$R[29]=["Computer Science","machine-learning","artificial-intelligence"],
-          organization_info:$R[30]=[$R[31]={name:"MIT",image:"images/organizations/mit.png"},$R[32]={name:"Meta",image:"images/organizations/meta.png"}],
-          authors:$R[33]=["Andrew McCallum","Dhiraj Gandhi"],
-          full_authors:$R[34]=[$R[35]={id:"author-2",full_name:"Andrew McCallum",verified:!1}],
-          author_info:$R[36]=[],
-          github_stars:165,
-          github_url:"https://github.com/example/rlm",
-          canonical_id:"2512.24601v1",
-          version_id:"version-rlm"
-        }
-      ]
-    </script>
-  </body>
-</html>
-"""
-
 ASSISTANT_HOME_SESSIONS_BEFORE_PAYLOAD = [
     {
         "id": "session-existing",

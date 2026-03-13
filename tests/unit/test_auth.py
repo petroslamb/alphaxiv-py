@@ -8,14 +8,12 @@ from alphaxiv.auth import (
     authenticate_with_api_key,
     build_saved_api_key,
     clear_saved_api_key,
-    legacy_saved_auth_exists,
-    load_api_key_authorization,
     load_api_key_value,
     load_saved_api_key,
     resolve_api_key,
     save_api_key,
 )
-from alphaxiv.paths import get_api_key_path, get_legacy_auth_path
+from alphaxiv.paths import get_api_key_path
 
 
 def test_build_saved_api_key_normalizes_prefix_and_exposes_metadata() -> None:
@@ -47,21 +45,16 @@ def test_save_and_load_api_key(monkeypatch, tmp_path) -> None:
     assert loaded.api_key == "axv1_test-token"
     assert loaded.display_name == "petros"
     assert loaded.saved_at == datetime(2026, 3, 12, 9, 0, tzinfo=UTC)
-    assert load_api_key_authorization() == "Bearer axv1_test-token"
     assert get_api_key_path().exists()
 
 
-def test_clear_saved_api_key_removes_legacy_auth(monkeypatch, tmp_path) -> None:
+def test_clear_saved_api_key_removes_saved_key(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
     save_api_key(build_saved_api_key("axv1_test-token"))
-    legacy_auth_path = get_legacy_auth_path()
-    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
 
-    clear_saved_api_key(clear_legacy=True)
+    clear_saved_api_key()
 
     assert not get_api_key_path().exists()
-    assert not legacy_auth_path.exists()
 
 
 def test_resolve_api_key_uses_env_first(monkeypatch, tmp_path) -> None:
@@ -75,16 +68,6 @@ def test_resolve_api_key_uses_env_first(monkeypatch, tmp_path) -> None:
     assert saved_api_key.api_key == "axv1_env-token"
     assert saved_api_key.source == "env"
     assert load_api_key_value() == "axv1_env-token"
-    assert load_api_key_authorization() == "Bearer axv1_env-token"
-
-
-def test_legacy_saved_auth_exists(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
-    legacy_auth_path = get_legacy_auth_path()
-    legacy_auth_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_auth_path.write_text('{"access_token": "legacy-token"}')
-
-    assert legacy_saved_auth_exists()
 
 
 def test_authenticate_with_api_key_validates_and_returns_saved_api_key(monkeypatch) -> None:

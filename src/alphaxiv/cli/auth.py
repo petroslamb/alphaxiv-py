@@ -8,11 +8,10 @@ from ..auth import (
     ALPHAXIV_API_KEY_ENV,
     authenticate_with_api_key,
     clear_saved_api_key,
-    legacy_saved_auth_exists,
     resolve_api_key,
     save_api_key,
 )
-from ..paths import get_api_key_path, get_legacy_auth_path
+from ..paths import get_api_key_path
 from .grouped import WrappedHelpGroup
 from .helpers import console, refresh_api_key_user, render_api_key_table
 
@@ -20,15 +19,6 @@ auth = WrappedHelpGroup(
     "auth",
     help="Validate, inspect, and clear the alphaXiv API key used by the CLI.",
 )
-
-
-def _print_legacy_auth_warning() -> None:
-    console.print("[yellow]Legacy auth.json found but ignored.[/yellow]")
-    console.print(
-        "[dim]Browser/session-token auth is no longer supported. Create an API key in the "
-        "alphaXiv web app, then run 'alphaxiv auth set-api-key'.[/dim]"
-    )
-    console.print(f"[dim]Legacy file: {get_legacy_auth_path()}[/dim]")
 
 
 def _load_display_api_key():
@@ -75,21 +65,14 @@ def status() -> None:
             f"Local key path: {get_api_key_path()}[/dim]"
         )
 
-    if legacy_saved_auth_exists():
-        console.print()
-        _print_legacy_auth_warning()
-
 
 @auth.command("clear")
 def clear() -> None:
-    """Remove the saved local API key and any ignored legacy auth file."""
+    """Remove the saved local API key."""
     had_api_key = get_api_key_path().exists()
-    had_legacy_auth = legacy_saved_auth_exists()
-    clear_saved_api_key(clear_legacy=True)
-    if had_api_key or had_legacy_auth:
-        console.print("[green]Removed local alphaXiv auth files.[/green]")
+    clear_saved_api_key()
+    if had_api_key:
+        console.print("[green]Removed local alphaXiv API key.[/green]")
     else:
-        console.print("[yellow]No local alphaXiv auth files were present.[/yellow]")
+        console.print("[yellow]No local alphaXiv API key was present.[/yellow]")
     console.print(f"[dim]API key path: {get_api_key_path()}[/dim]")
-    if had_legacy_auth:
-        console.print(f"[dim]Legacy auth removed: {get_legacy_auth_path()}[/dim]")

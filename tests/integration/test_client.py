@@ -146,6 +146,29 @@ async def test_feed_filter_search(httpx_mock) -> None:
 
 
 @pytest.mark.asyncio
+async def test_feed_with_topic_and_github_sort(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=(
+            "https://api.alphaxiv.org/papers/v3/feed?pageNum=0&pageSize=1&sort=GitHub"
+            "&interval=All+time&topics=%5B%22agentic-frameworks%22%5D&source=GitHub"
+        ),
+        json=EXPLORE_FEED_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        cards = await client.explore.feed(
+            sort="most-stars",
+            source="GitHub",
+            topics=("agentic-frameworks",),
+            limit=1,
+        )
+
+    assert len(cards) == 1
+    assert cards[0].github_url == "https://github.com/PKU-YuanGroup/Helios"
+
+
+@pytest.mark.asyncio
 async def test_get_bare_id_resolution(httpx_mock) -> None:
     httpx_mock.add_response(
         method="GET",

@@ -13,7 +13,6 @@ import httpx
 from .exceptions import APIError
 
 BASE_API_URL = "https://api.alphaxiv.org"
-BASE_WEB_URL = "https://www.alphaxiv.org"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_CONNECT_TIMEOUT = 10.0
 DEFAULT_RETRIES = 2
@@ -179,21 +178,6 @@ class ClientCore:
                 url=str(response.url),
                 response_text=response.text[:1000],
             ) from exc
-
-    async def get_text(
-        self,
-        url: str,
-        *,
-        params: dict[str, Any] | None = None,
-        follow_redirects: bool = False,
-    ) -> str:
-        response = await self.request(
-            "GET",
-            url,
-            params=params,
-            follow_redirects=follow_redirects,
-        )
-        return response.text
 
     async def download(self, url: str, path: str | Path) -> Path:
         output_path = Path(path)

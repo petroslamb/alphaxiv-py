@@ -13,7 +13,7 @@ import httpx
 
 from ._core import BASE_API_URL, DEFAULT_TIMEOUT, USER_AGENT
 from .exceptions import APIError
-from .paths import ensure_home_path, get_api_key_path, get_legacy_auth_path
+from .paths import ensure_home_path, get_api_key_path
 
 ALPHAXIV_API_KEY_ENV = "ALPHAXIV_API_KEY"
 
@@ -202,14 +202,6 @@ def load_api_key_value() -> str | None:
     return saved_api_key.api_key
 
 
-def load_api_key_authorization() -> str | None:
-    """Load the effective Authorization header value, if present."""
-    saved_api_key = resolve_api_key()
-    if not saved_api_key:
-        return None
-    return saved_api_key.authorization_header
-
-
 def save_api_key(saved_api_key: SavedApiKey, path: Path | None = None) -> Path:
     """Persist an API key to disk with owner-only permissions."""
     ensure_home_path()
@@ -220,21 +212,11 @@ def save_api_key(saved_api_key: SavedApiKey, path: Path | None = None) -> Path:
     return api_key_path
 
 
-def clear_saved_api_key(*, path: Path | None = None, clear_legacy: bool = True) -> None:
-    """Remove the saved API key and optionally any legacy auth file."""
+def clear_saved_api_key(*, path: Path | None = None) -> None:
+    """Remove the saved API key."""
     api_key_path = path or get_api_key_path()
     if api_key_path.exists():
         api_key_path.unlink()
-    if clear_legacy:
-        legacy_auth_path = get_legacy_auth_path()
-        if legacy_auth_path.exists():
-            legacy_auth_path.unlink()
-
-
-def legacy_saved_auth_exists(path: Path | None = None) -> bool:
-    """Return whether a legacy browser-token auth.json file is present."""
-    legacy_auth_path = path or get_legacy_auth_path()
-    return legacy_auth_path.exists()
 
 
 def fetch_current_user(api_key: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:

@@ -24,10 +24,9 @@ alphaxiv auth clear
 `auth set-api-key` without `--api-key` prompts for the API key with hidden input before
 validating and saving it.
 
-`auth status` prints auth loaded from `ALPHAXIV_API_KEY` or `api-key.json`. If a legacy
-`auth.json` from the old browser-token flow is present, the CLI warns and ignores it.
+`auth status` prints auth loaded from `ALPHAXIV_API_KEY` or `api-key.json`.
 
-`auth clear` removes the locally saved `api-key.json` and any legacy `auth.json`.
+`auth clear` removes the locally saved `api-key.json`.
 
 ## Context
 

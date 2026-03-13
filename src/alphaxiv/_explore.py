@@ -191,7 +191,9 @@ class ExploreAPI:
         }
 
         if organizations:
-            params["organizations"] = json.dumps([item.strip() for item in organizations if item.strip()])
+            params["organizations"] = json.dumps(
+                [item.strip() for item in organizations if item.strip()]
+            )
 
         category_filters = _dedupe(
             [_normalize_menu_category(item) for item in menu_categories]
