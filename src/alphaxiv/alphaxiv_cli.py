@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 
 from . import __version__
-from .cli import assistant, auth, context, feed, folders, paper, search
+from .cli import agent, assistant, auth, context, feed, folders, guide, paper, search, skill
 from .cli.grouped import WrappedHelpGroup
 
 
@@ -16,7 +16,8 @@ def cli() -> None:
 
     Typical workflow: use `search` or `feed` to discover papers, `paper` to inspect
     metadata and full text, `assistant` to ask follow-up questions, and `context`
-    to save the current paper or assistant session between commands.
+    to save the current paper or assistant session between commands. Use `guide`
+    for task-level workflows and `skill` to install packaged agent integrations.
     """
 
 
@@ -27,6 +28,9 @@ cli.add_command(feed)
 cli.add_command(paper)
 cli.add_command(assistant)
 cli.add_command(folders)
+cli.add_command(guide)
+cli.add_command(skill)
+cli.add_command(agent)
 
 
 def main() -> None:

@@ -58,6 +58,7 @@ async def test_from_saved_api_key_sends_authorization_header(
     httpx_mock, monkeypatch, tmp_path
 ) -> None:
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    monkeypatch.delenv("ALPHAXIV_API_KEY", raising=False)
     save_api_key(build_saved_api_key("axv1_saved-token"))
     httpx_mock.add_response(
         method="GET",

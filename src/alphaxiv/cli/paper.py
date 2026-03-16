@@ -30,6 +30,18 @@ from .helpers import (
     run_async_with_click_errors,
 )
 from .messages import click_error, usage_error
+from .serialize import (
+    reject_raw_and_json,
+    serialize_feed_card,
+    serialize_folder,
+    serialize_full_text,
+    serialize_overview_status,
+    serialize_paper,
+    serialize_paper_comment,
+    serialize_paper_overview,
+    serialize_paper_resources,
+    serialize_transcript,
+)
 
 paper = WrappedHelpGroup(
     "paper",
@@ -413,7 +425,8 @@ def _render_summary_sections(overview_obj: PaperOverview, identifier: str) -> No
 
 @paper.command("show")
 @click.argument("paper_id", required=False)
-def show_paper(paper_id: str | None) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_paper(paper_id: str | None, json_output: bool) -> None:
     """Show resolved ids, authors, topics, and core paper links.
 
     Use this first when you want to confirm which paper you are looking at or inspect the
@@ -421,6 +434,9 @@ def show_paper(paper_id: str | None) -> None:
     """
     identifier = get_effective_identifier(paper_id)
     paper_obj = fetch_paper(identifier)
+    if json_output:
+        print_json(serialize_paper(paper_obj, requested_id=identifier))
+        return
 
     table = Table(title=paper_obj.version.title)
     table.add_column("Field")
@@ -438,7 +454,8 @@ def show_paper(paper_id: str | None) -> None:
 
 @paper.command("abstract")
 @click.argument("paper_id", required=False)
-def show_abstract(paper_id: str | None) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_abstract(paper_id: str | None, json_output: bool) -> None:
     """Print the paper title and original abstract.
 
     Use this for the author-written abstract. Use `paper summary` for the short AI digest
@@ -446,6 +463,16 @@ def show_abstract(paper_id: str | None) -> None:
     """
     identifier = get_effective_identifier(paper_id)
     paper_obj = fetch_paper(identifier)
+    if json_output:
+        print_json(
+            {
+                "requested_id": identifier,
+                "resolved": serialize_paper(paper_obj, requested_id=identifier)["resolved"],
+                "title": paper_obj.version.title,
+                "abstract": paper_obj.version.abstract,
+            }
+        )
+        return
     console.print(f"[bold]{paper_obj.version.title}[/bold]")
     console.print()
     console.print(paper_obj.version.abstract or "[dim]No abstract returned.[/dim]")
@@ -455,16 +482,30 @@ def show_abstract(paper_id: str | None) -> None:
 @click.argument("paper_id", required=False)
 @click.option("--language", default="en", show_default=True, help="Overview language to request.")
 @click.option("--raw", is_flag=True, help="Print the raw structured summary JSON payload.")
-def show_summary(paper_id: str | None, language: str, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_summary(paper_id: str | None, language: str, raw: bool, json_output: bool) -> None:
     """Print the short structured AI summary for a paper.
 
     Use this when you want a quick AI digest. Use `paper abstract` for the original abstract
     and `paper overview` for the longer generated write-up.
     """
     identifier = get_effective_identifier(paper_id)
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv paper summary --help")
     overview_obj = fetch_overview(identifier, language=language)
     if raw:
         print_json(overview_obj.summary.raw if overview_obj.summary else {})
+        return
+    if json_output:
+        print_json(
+            {
+                "requested_id": identifier,
+                "language": language,
+                "title": overview_obj.title,
+                "summary": serialize_paper_overview(overview_obj, requested_id=identifier)[
+                    "summary"
+                ],
+            }
+        )
         return
     _render_summary_sections(overview_obj, identifier)
 
@@ -473,16 +514,29 @@ def show_summary(paper_id: str | None, language: str, raw: bool) -> None:
 @click.argument("paper_id", required=False)
 @click.option("--language", default="en", show_default=True, help="Overview language to request.")
 @click.option("--machine", is_flag=True, help="Print the raw machine-readable overview markdown.")
-def paper_overview(paper_id: str | None, language: str, machine: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def paper_overview(paper_id: str | None, language: str, machine: bool, json_output: bool) -> None:
     """Show the long AI overview for a paper in the selected language.
 
     Use this when the short summary is not enough and you want the full generated write-up.
     Use `paper summary` for the shorter digest.
     """
     identifier = get_effective_identifier(paper_id)
+    if machine and json_output:
+        raise click_error(
+            "Use either --machine or --json, not both.",
+            suggestions=(
+                f"alphaxiv paper overview {identifier} --machine",
+                f"alphaxiv paper overview {identifier} --json",
+            ),
+            see_help="alphaxiv paper overview --help",
+        )
     overview_obj = fetch_overview(identifier, language=language)
     if machine:
         console.print(overview_obj.overview_markdown)
+        return
+    if json_output:
+        print_json(serialize_paper_overview(overview_obj, requested_id=identifier))
         return
     console.print(f"[bold]{overview_obj.title}[/bold]")
     if overview_obj.summary:
@@ -492,7 +546,8 @@ def paper_overview(paper_id: str | None, language: str, machine: bool) -> None:
 
 @paper.command("overview-status")
 @click.argument("paper_id", required=False)
-def paper_overview_status(paper_id: str | None) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def paper_overview_status(paper_id: str | None, json_output: bool) -> None:
     """Show whether the paper overview exists and which translations are available.
 
     Use this to check if an overview has been generated yet before requesting `paper summary`
@@ -500,6 +555,9 @@ def paper_overview_status(paper_id: str | None) -> None:
     """
     identifier = get_effective_identifier(paper_id)
     status_obj = fetch_overview_status(identifier)
+    if json_output:
+        print_json(serialize_overview_status(status_obj, requested_id=identifier))
+        return
     table = Table(title="Overview Status")
     table.add_column("Field")
     table.add_column("Value")
@@ -540,7 +598,13 @@ def paper_overview_status(paper_id: str | None) -> None:
     is_flag=True,
     help="Print the AI audio summary transcript when available.",
 )
-def paper_resources(paper_id: str | None, show_bibtex: bool, show_transcript: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def paper_resources(
+    paper_id: str | None,
+    show_bibtex: bool,
+    show_transcript: bool,
+    json_output: bool,
+) -> None:
     """Show related paper resources such as BibTeX, transcript, links, and implementations.
 
     Use this when you want citations, implementation links, podcast artifacts, or the audio
@@ -561,11 +625,17 @@ def paper_resources(paper_id: str | None, show_bibtex: bool, show_transcript: bo
         bibtex = fetch_bibtex(identifier)
         if not bibtex:
             raise click.ClickException(f"No BibTeX citation was available for '{identifier}'.")
+        if json_output:
+            print_json({"requested_id": identifier, "bibtex": bibtex})
+            return
         console.print(bibtex)
         return
 
     if show_transcript:
         transcript = fetch_transcript(identifier)
+        if json_output:
+            print_json(serialize_transcript(transcript, requested_id=identifier))
+            return
         console.print(
             f"[bold]Audio Transcript[/bold] for {transcript.resolved.preferred_id} "
             f"({len(transcript.lines)} lines)"
@@ -577,6 +647,9 @@ def paper_resources(paper_id: str | None, show_bibtex: bool, show_transcript: bo
         return
 
     resources_obj = fetch_resources(identifier)
+    if json_output:
+        print_json(serialize_paper_resources(resources_obj, requested_id=identifier))
+        return
     table = Table(title="Paper Resources")
     table.add_column("Field")
     table.add_column("Value")
@@ -604,7 +677,8 @@ def paper_resources(paper_id: str | None, show_bibtex: bool, show_transcript: bo
     type=int,
     help="Extract only the selected 1-based PDF pages. Repeat to include multiple pages.",
 )
-def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_text(paper_id: str | None, pages: tuple[int, ...], json_output: bool) -> None:
     """Extract readable text from the paper PDF, optionally limited to specific pages.
 
     Use this when you want the paper body as text. Use `paper pdf download` when you want the
@@ -628,6 +702,24 @@ def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
                 see_help="alphaxiv paper text --help",
             )
         selected_pages = [page_map[page_number] for page_number in requested_pages]
+    else:
+        requested_pages = None
+
+    if json_output:
+        print_json(
+            {
+                **serialize_full_text(
+                    full_text,
+                    requested_id=identifier,
+                    requested_pages=requested_pages,
+                ),
+                "pages": [
+                    {"page_number": page.page_number, "text": page.text} for page in selected_pages
+                ],
+                "text": "\n\n".join(page.text for page in selected_pages if page.text),
+            }
+        )
+        return
 
     console.print(
         f"[bold]Full Text[/bold] for {full_text.resolved.preferred_id} "
@@ -645,9 +737,11 @@ def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
 @paper_folders.command("list")
 @click.argument("paper_id", required=False)
 @click.option("--raw", is_flag=True, help="Print the raw folder payloads with membership context.")
-def list_paper_folders(paper_id: str | None, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def list_paper_folders(paper_id: str | None, raw: bool, json_output: bool) -> None:
     """Show which of your folders currently contain the selected paper."""
     identifier = get_effective_identifier(paper_id)
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv paper folders list --help")
     preferred_id, paper_group_id, folder_items = fetch_paper_folder_membership(identifier)
     if raw:
         print_json(
@@ -658,6 +752,21 @@ def list_paper_folders(paper_id: str | None, raw: bool) -> None:
                     {
                         **folder.raw,
                         "containsPaper": folder.contains_paper_group_id(paper_group_id),
+                    }
+                    for folder in folder_items
+                ],
+            }
+        )
+        return
+    if json_output:
+        print_json(
+            {
+                "paper_id": preferred_id,
+                "paper_group_id": paper_group_id,
+                "folders": [
+                    {
+                        **serialize_folder(folder, include_papers=False),
+                        "contains_paper": folder.contains_paper_group_id(paper_group_id),
                     }
                     for folder in folder_items
                 ],
@@ -725,12 +834,22 @@ def remove_paper_folder(args: tuple[str, ...], yes: bool) -> None:
 @paper_comments.command("list")
 @click.argument("paper_id", required=False)
 @click.option("--raw", is_flag=True, help="Print the raw comments JSON payload.")
-def list_comments(paper_id: str | None, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def list_comments(paper_id: str | None, raw: bool, json_output: bool) -> None:
     """Show the public paper comment thread, including nested replies."""
     identifier = get_effective_identifier(paper_id)
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv paper comments list --help")
     comments = fetch_comments(identifier)
     if raw:
         print_json([comment.raw for comment in comments])
+        return
+    if json_output:
+        print_json(
+            {
+                "paper_id": identifier,
+                "comments": [serialize_paper_comment(comment) for comment in comments],
+            }
+        )
         return
     if not comments:
         console.print(f"[yellow]No comments were available for '{identifier}'.[/yellow]")
@@ -835,16 +954,27 @@ def remove_comment(comment_id: str, yes: bool) -> None:
     help="Maximum number of deduplicated similar papers to print.",
 )
 @click.option("--raw", is_flag=True, help="Print the raw similar-papers JSON payload.")
-def show_similar(paper_id: str | None, limit: int | None, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_similar(paper_id: str | None, limit: int | None, raw: bool, json_output: bool) -> None:
     """Show similar papers to expand or validate a shortlist.
 
     Use this after finding one promising paper to discover nearby work or check whether your
     shortlist is missing obvious neighbors.
     """
     identifier = get_effective_identifier(paper_id)
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv paper similar --help")
     cards = fetch_similar(identifier, limit=limit)
     if raw:
         print_json([card.raw for card in cards])
+        return
+    if json_output:
+        print_json(
+            {
+                "paper_id": identifier,
+                "limit": limit,
+                "cards": [serialize_feed_card(card) for card in cards],
+            }
+        )
         return
     if not cards:
         console.print(f"[yellow]No similar papers were returned for '{identifier}'.[/yellow]")
@@ -876,14 +1006,19 @@ def mark_paper_viewed(paper_id: str | None, yes: bool) -> None:
 
 @paper_pdf.command("url")
 @click.argument("paper_id", required=False)
-def show_pdf_url(paper_id: str | None) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_pdf_url(paper_id: str | None, json_output: bool) -> None:
     """Print the resolved public PDF URL for a paper.
 
     Use this when you need the fetchable PDF URL. Use `paper text` for extracted text or
     `paper pdf download` to save the file.
     """
     identifier = get_effective_identifier(paper_id)
-    console.print(fetch_pdf_url(identifier))
+    pdf_url = fetch_pdf_url(identifier)
+    if json_output:
+        print_json({"paper_id": identifier, "pdf_url": pdf_url})
+        return
+    console.print(pdf_url)
 
 
 @paper_pdf.command("download")

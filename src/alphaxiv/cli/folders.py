@@ -8,6 +8,7 @@ from rich.table import Table
 from ..types import Folder
 from .grouped import WrappedHelpGroup
 from .helpers import console, make_client, print_json, run_async_with_click_errors
+from .serialize import reject_raw_and_json, serialize_folder
 
 folders = WrappedHelpGroup(
     "folders",
@@ -70,11 +71,23 @@ def _render_folder_papers(folder: Folder) -> None:
     help="Also print the papers contained in each returned folder.",
 )
 @click.option("--raw", is_flag=True, help="Print the raw folders JSON payload.")
-def list_folders(show_papers: bool, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def list_folders(show_papers: bool, raw: bool, json_output: bool) -> None:
     """List your alphaXiv folders, optionally including the papers inside them."""
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv folders list --help")
     folder_items = fetch_folders()
     if raw:
         print_json([folder.raw for folder in folder_items])
+        return
+    if json_output:
+        print_json(
+            {
+                "include_papers": show_papers,
+                "folders": [
+                    serialize_folder(folder, include_papers=show_papers) for folder in folder_items
+                ],
+            }
+        )
         return
 
     table = Table(title="alphaXiv Folders")
@@ -102,11 +115,16 @@ def list_folders(show_papers: bool, raw: bool) -> None:
 @folders.command("show")
 @click.argument("folder")
 @click.option("--raw", is_flag=True, help="Print the raw folder JSON payload.")
-def show_folder(folder: str, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_folder(folder: str, raw: bool, json_output: bool) -> None:
     """Show one folder and the full paper list currently saved inside it."""
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv folders show --help")
     folder_item = fetch_folder(folder)
     if raw:
         print_json(folder_item.raw)
+        return
+    if json_output:
+        print_json(serialize_folder(folder_item, include_papers=True))
         return
 
     table = Table(title=folder_item.name)

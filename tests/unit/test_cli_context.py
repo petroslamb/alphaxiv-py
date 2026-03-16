@@ -111,6 +111,7 @@ def test_auth_clear_command_removes_saved_api_key(monkeypatch, tmp_path) -> None
 def test_auth_status_shows_saved_api_key_without_model(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    monkeypatch.delenv("ALPHAXIV_API_KEY", raising=False)
     save_api_key(
         build_saved_api_key(
             "axv1_test-token",

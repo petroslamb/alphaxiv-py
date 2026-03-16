@@ -14,7 +14,15 @@ from ..types import (
     SearchResult,
 )
 from .grouped import WrappedHelpGroup
-from .helpers import console, make_client, run_async
+from .helpers import console, make_client, print_json, run_async
+from .serialize import (
+    serialize_feed_card,
+    serialize_feed_filter_search,
+    serialize_filter_options,
+    serialize_homepage_search,
+    serialize_organization_result,
+    serialize_search_result,
+)
 
 search = WrappedHelpGroup(
     "search",
@@ -228,9 +236,13 @@ def _render_filter_search(results: FeedFilterSearchResults) -> None:
 
 @search.command("all")
 @click.argument("query")
-def search_all(query: str) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def search_all(query: str, json_output: bool) -> None:
     """Search papers, topic suggestions, and organizations for one query."""
     results = fetch_homepage_search(query)
+    if json_output:
+        print_json(serialize_homepage_search(results))
+        return
     _render_papers_table(query, results)
     if results.topics:
         _render_topics_table(results.topics)
@@ -240,25 +252,47 @@ def search_all(query: str) -> None:
 
 @search.command("papers")
 @click.argument("query")
-def search_papers(query: str) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def search_papers(query: str, json_output: bool) -> None:
     """Search papers by keyword and print matching alphaXiv paper ids."""
     results = fetch_paper_search(query)
+    if json_output:
+        print_json(
+            {
+                "query": query,
+                "papers": [serialize_search_result(result) for result in results],
+            }
+        )
+        return
     _render_paper_results_table(query, results)
 
 
 @search.command("organizations")
 @click.argument("query")
-def search_organizations(query: str) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def search_organizations(query: str, json_output: bool) -> None:
     """Search organizations by name and print their slugs."""
     results = fetch_organization_search(query)
+    if json_output:
+        print_json(
+            {
+                "query": query,
+                "organizations": [serialize_organization_result(item) for item in results],
+            }
+        )
+        return
     _render_organizations_table(results, title=f"Organization Results for: {query}")
 
 
 @search.command("topics")
 @click.argument("query")
-def search_topics(query: str) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def search_topics(query: str, json_output: bool) -> None:
     """Suggest feed topic slugs for a natural-language query."""
     results = fetch_topic_search(query)
+    if json_output:
+        print_json({"query": query, "topics": results})
+        return
     _render_topics_table(results)
 
 
@@ -314,6 +348,7 @@ def search_topics(query: str) -> None:
 @click.option(
     "--limit", type=int, default=10, show_default=True, help="Maximum number of cards to print."
 )
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
 def list_feed(
     sort: str,
     organizations: tuple[str, ...],
@@ -325,6 +360,7 @@ def list_feed(
     source: str | None,
     interval: str | None,
     limit: int,
+    json_output: bool,
 ) -> None:
     """List recent or ranked papers from the public alphaXiv homepage feed.
 
@@ -343,6 +379,25 @@ def list_feed(
         interval=interval,
         limit=limit,
     )
+    if json_output:
+        print_json(
+            {
+                "filters": {
+                    "sort": sort,
+                    "organizations": list(organizations),
+                    "menu_categories": list(menu_categories),
+                    "categories": list(categories),
+                    "subcategories": list(subcategories),
+                    "custom_categories": list(custom_categories),
+                    "topics": list(topics),
+                    "source": source,
+                    "interval": interval,
+                    "limit": limit,
+                },
+                "cards": [serialize_feed_card(card) for card in cards],
+            }
+        )
+        return
 
     table = Table(title="alphaXiv Feed")
     table.add_column("Paper ID")
@@ -387,21 +442,31 @@ def list_feed(
     ),
 )
 @click.pass_context
-def feed_filters(ctx: click.Context) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def feed_filters(ctx: click.Context, json_output: bool) -> None:
     """Show available feed sorts, date windows, sources, topics, and organizations."""
     if ctx.invoked_subcommand is None:
-        _render_filter_options(fetch_filter_options())
+        options = fetch_filter_options()
+        if json_output:
+            print_json(serialize_filter_options(options))
+            return
+        _render_filter_options(options)
 
 
 @feed_filters.command("search")
 @click.argument("query")
-def search_feed_filters(query: str) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def search_feed_filters(query: str, json_output: bool) -> None:
     """Search live topic and organization filters accepted by `feed list`.
 
     Use this when you have natural-language topic words but do not know the exact alphaXiv
     `--topic` or `--organization` values yet.
     """
-    _render_filter_search(fetch_feed_filter_search(query))
+    results = fetch_feed_filter_search(query)
+    if json_output:
+        print_json(serialize_feed_filter_search(results))
+        return
+    _render_filter_search(results)
 
 
 feed.add_command(feed_filters)

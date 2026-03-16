@@ -9,6 +9,15 @@ The CLI is organized around resource groups:
 - `alphaxiv paper`
 - `alphaxiv assistant`
 - `alphaxiv folders`
+- `alphaxiv guide`
+- `alphaxiv skill`
+- `alphaxiv agent`
+
+For automation and agent use:
+
+- `--json` is the stable machine-readable output mode
+- `--raw` is the backend-shaped payload/debug mode on commands that already expose it
+- commands that support both reject `--raw --json`
 
 ## Auth
 
@@ -32,6 +41,7 @@ validating and saving it.
 
 ```bash
 alphaxiv context show
+alphaxiv context show --json
 alphaxiv context show paper
 alphaxiv context show assistant
 alphaxiv context use paper 1706.03762
@@ -41,7 +51,8 @@ alphaxiv context clear paper
 alphaxiv context clear assistant
 ```
 
-`context show` prints both the current paper context and current assistant context.
+`context show` prints both the current paper context and current assistant context. Add `--json`
+for a stable object with `paper` and `assistant` keys.
 
 `context show paper` best-effort refreshes a missing saved paper title when the context file has a
 bare or versioned arXiv id but no title yet.
@@ -60,25 +71,32 @@ assistant` to target only one file.
 ```bash
 alphaxiv search all "attention is all you need"
 alphaxiv search papers "attention is all you need"
+alphaxiv search papers "attention is all you need" --json
 alphaxiv search organizations "attention is all you need"
 alphaxiv search topics "attention is all you need"
 ```
 
 `search all` performs the homepage-style search and prints paper matches plus suggested topics and
-organization matches when available.
+organization matches when available. Add `--json` for a normalized result object.
 
-`search papers` calls only the public paper search endpoint.
+`search papers` calls only the public paper search endpoint. Add `--json` for a stable list of
+normalized paper matches.
 
-`search organizations` calls only the public organization search endpoint.
+`search organizations` calls only the public organization search endpoint. Add `--json` for
+normalized organization objects.
 
-`search topics` calls only the public closest-topic endpoint.
+`search topics` calls only the public closest-topic endpoint. Add `--json` for a normalized topic
+list.
 
 ## Feed
 
 ```bash
 alphaxiv feed filters
+alphaxiv feed filters --json
 alphaxiv feed filters search "agentic"
+alphaxiv feed filters search "agentic" --json
 alphaxiv feed list --sort hot --limit 10
+alphaxiv feed list --sort hot --limit 10 --json
 alphaxiv feed list --sort likes --limit 5
 alphaxiv feed list --organization MIT --source twitter --interval 30-days --limit 5
 alphaxiv feed list --category computer-science --custom-category generative-models --limit 5
@@ -86,8 +104,11 @@ alphaxiv feed list --topic agentic-frameworks --organization Meta --limit 5
 alphaxiv feed list --source github --sort most-stars --limit 5
 ```
 
+`feed filters` prints the current feed filter groups. Add `--json` for a normalized object with
+sorts, intervals, sources, and organizations.
+
 `feed filters search` mirrors the website filter drawer search box by querying live topic and
-organization filters.
+organization filters. Add `--json` to return normalized topic and organization results.
 
 Supported `feed list` options mirror the public homepage feed API:
 
@@ -106,13 +127,18 @@ Supported `feed list` options mirror the public homepage feed API:
 ultimately resolves many drawer selections down to raw topic values before calling
 `/papers/v3/feed`.
 
+`feed list --json` returns the selected filters plus normalized feed cards.
+
 ## Paper
 
 ```bash
 alphaxiv paper show 1706.03762
+alphaxiv paper show 1706.03762 --json
 alphaxiv paper abstract 1706.03762
 alphaxiv paper summary 1706.03762
+alphaxiv paper summary 1706.03762 --json
 alphaxiv paper overview 1706.03762
+alphaxiv paper overview 1706.03762 --json
 alphaxiv paper overview-status 1706.03762
 alphaxiv paper resources 1706.03762
 alphaxiv paper resources 1706.03762 --bibtex
@@ -133,25 +159,42 @@ alphaxiv paper view 1706.03762 --yes
 If the paper id is omitted, every optional `[paper-id]` command uses the current paper from
 context.
 
-`paper abstract` prints the paper title and abstract from the main paper metadata payload.
+These read commands support `--json`:
+
+- `paper show`
+- `paper abstract`
+- `paper summary`
+- `paper overview`
+- `paper overview-status`
+- `paper resources`
+- `paper text`
+- `paper similar`
+- `paper comments list`
+- `paper folders list`
+- `paper pdf url`
+
+`paper abstract` prints the paper title and abstract from the main paper metadata payload. Add
+`--json` for a stable object with the title, abstract, and resolved ids.
 
 `paper summary` prints the structured AI summary from the overview endpoint. Add
-`--language <code>` to request a translated summary, or `--raw` to print the raw structured
-summary payload.
+`--language <code>` to request a translated summary, `--json` for normalized structured output, or
+`--raw` to print the raw structured summary payload.
 
 `paper overview --machine` prints only the raw machine-readable markdown shown behind the overview
-page's `Machine` toggle.
+page's `Machine` toggle. Use `--json` for a normalized object with summary, overview markdown, and
+citations. `--machine` and `--json` are mutually exclusive.
 
 `paper overview-status` calls the public overview status endpoint and prints the generation state
 plus available translation languages.
 
-`paper resources --bibtex` prints the paper's BibTeX citation when alphaXiv exposes one.
+`paper resources --bibtex` prints the paper's BibTeX citation when alphaXiv exposes one. Add
+`--json` to return a normalized `bibtex` object instead of plain text.
 
 `paper resources --transcript` prints the AI audio summary transcript when the paper has a public
-podcast transcript.
+podcast transcript. Add `--json` for normalized transcript lines and joined transcript text.
 
 `paper comments list` calls the public comments endpoint and renders the nested thread. Add `--raw`
-to print the raw JSON payload.
+to print the raw JSON payload or `--json` for normalized nested comments.
 
 `paper comments add` creates a top-level authenticated comment. It requires `--body`, accepts
 optional `--title`, and supports the confirmed tag set:
@@ -168,14 +211,16 @@ confirmation unless `--yes` is supplied.
 supplied.
 
 `paper similar` calls the public similar-papers endpoint. Add `--limit <n>` to trim the returned
-cards and `--raw` to print the raw JSON payload.
+cards, `--json` for normalized similar-card output, or `--raw` to print the raw JSON payload.
 
 `paper text` calls the public full-text endpoint for the resolved paper version UUID.
 
 - Without `--page`, it prints every page in order.
 - `--page <n>` is repeatable and limits output to specific 1-based pages.
+- Add `--json` for normalized page objects and joined text.
 
-`paper pdf url` prints the resolved fetcher URL for the public PDF.
+`paper pdf url` prints the resolved fetcher URL for the public PDF. Add `--json` for a stable
+`paper_id` + `pdf_url` object.
 
 `paper pdf download` accepts either `<path>` or `<paper-id> <path>`. If the paper id is omitted,
 it uses the current saved paper context.
@@ -191,28 +236,32 @@ confirmation unless `--yes` is supplied.
 ```bash
 alphaxiv assistant list
 alphaxiv assistant list --paper 1706.03762
+alphaxiv assistant list --json
 alphaxiv assistant model
+alphaxiv assistant model --json
 alphaxiv assistant url-metadata https://github.com/PKU-YuanGroup/Helios
 alphaxiv assistant set-model "Claude 4.6 Sonnet"
 alphaxiv assistant start "Find papers on agent frameworks"
 alphaxiv assistant start --model "GPT 5.4" "Find papers on agent frameworks"
 alphaxiv assistant reply "Focus on the most cited ones"
 alphaxiv assistant history
+alphaxiv assistant history --json
 ```
 
 The assistant uses authenticated `assistant/v2` endpoints and streams responses over
 `text/event-stream`.
 
 `assistant list` defaults to homepage chats. Add `--paper <paper-id>` to list paper-scoped chats
-for a specific paper.
+for a specific paper. Add `--json` for a normalized session list.
 
 `assistant model` reads and prints the current preferred assistant model from `GET /users/v3`.
+Add `--json` for a normalized `{"model": ...}` object.
 
 `assistant set-model <label-or-id>` persists the preferred assistant model through
 `PATCH /users/v3/preferences`.
 
 `assistant url-metadata <url>` fetches the assistant-side link preview metadata for a URL. Add
-`--raw` to print the raw JSON payload.
+`--json` for normalized metadata or `--raw` to print the raw JSON payload.
 
 The CLI does not claim to know the full live model catalog. It reads the current preferred model
 from `GET /users/v3` and accepts explicit ids or label-like input without local catalog
@@ -235,7 +284,7 @@ validation.
 `assistant reply` also accepts `--model <label-or-id>` for a one-off model override.
 
 `assistant history` accepts an optional session id. Without one, it uses the saved current
-assistant chat.
+assistant chat. Add `--json` for normalized message objects or `--raw` for backend payloads.
 
 This assistant surface is distinct from the public `search` commands:
 
@@ -248,7 +297,61 @@ This assistant surface is distinct from the public `search` commands:
 ```bash
 alphaxiv folders list
 alphaxiv folders list --papers
+alphaxiv folders list --json
+alphaxiv folders show "Want to read"
+alphaxiv folders show "Want to read" --json
 ```
 
 `folders list` calls the authenticated folders endpoint and prints folder summaries. Add `--papers`
-to include the papers in each folder, or `--raw` to print the raw JSON payload.
+to include the papers in each folder, `--json` for normalized folder objects, or `--raw` to print
+the raw JSON payload.
+
+`folders show <folder>` prints one folder with its full paper list. Add `--json` for normalized
+folder output or `--raw` to print the raw JSON payload.
+
+## Guide
+
+```bash
+alphaxiv guide
+alphaxiv guide research
+alphaxiv guide paper
+alphaxiv guide assistant
+alphaxiv guide feed
+```
+
+`guide` is workflow-only. It does not repeat the command reference. Use it when `--help` is not
+enough and you want a task-level sequence such as recent-paper discovery or paper inspection.
+
+## Skill
+
+```bash
+alphaxiv skill install
+alphaxiv skill install --scope project --target codex
+alphaxiv skill status --scope all
+alphaxiv skill status --scope all --json
+alphaxiv skill show --target source
+alphaxiv skill show --target opencode
+alphaxiv skill uninstall --target claude-code --yes
+```
+
+`skill install` copies packaged alphaXiv integrations into user-level or project-level agent
+directories for Codex, Claude Code, and OpenCode.
+
+`skill status` inspects installed targets. Add `--json` for normalized installation records.
+
+`skill show --target source` prints the canonical packaged Codex `SKILL.md` source. Other targets
+print the packaged install bundle for that target.
+
+`skill uninstall` removes only installs that were managed by `alphaxiv skill install`. It refuses
+to delete unmanaged repository/source files.
+
+## Agent
+
+```bash
+alphaxiv agent show codex
+alphaxiv agent show claude-code
+alphaxiv agent show opencode
+```
+
+`agent show <target>` prints the target-specific integration guidance, install paths, and included
+files for Codex, Claude Code, or OpenCode.

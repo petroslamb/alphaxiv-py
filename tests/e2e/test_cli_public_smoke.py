@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,14 @@ def test_cli_public_search_and_feed_smoke(
     assert "Paper Search Results for: attention is all you need" in search_result.output
     assert SMOKE_PAPER_ID in search_result.output
 
+    search_json = invoke_cli(
+        cli_runner,
+        ["search", "papers", "attention is all you need", "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(search_json, "search", "papers", "attention is all you need", "--json")
+    assert '"paper_id": "1706.03762"' in search_json.output
+
     filters_result = invoke_cli(
         cli_runner,
         ["feed", "filters"],
@@ -39,6 +48,25 @@ def test_cli_public_search_and_feed_smoke(
     )
     assert_cli_ok(hot_feed_result, "feed", "list", "--sort", "hot", "--limit", "1")
     assert "alphaXiv Feed" in hot_feed_result.output
+
+    hot_feed_json = invoke_cli(
+        cli_runner,
+        ["feed", "list", "--sort", "hot", "--limit", "1", "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(
+        hot_feed_json,
+        "feed",
+        "list",
+        "--sort",
+        "hot",
+        "--limit",
+        "1",
+        "--json",
+    )
+    hot_feed_payload = json.loads(hot_feed_json.output)
+    assert hot_feed_payload["filters"]["sort"] == "hot"
+    assert hot_feed_payload["cards"]
 
     github_feed_result = invoke_cli(
         cli_runner,
@@ -65,6 +93,14 @@ def test_cli_public_search_and_feed_smoke(
     )
     assert_cli_ok(filter_search_result, "feed", "filters", "search", "agentic")
     assert "Feed Filter Topics for: agentic" in filter_search_result.output
+
+    filter_search_json = invoke_cli(
+        cli_runner,
+        ["feed", "filters", "search", "agentic", "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(filter_search_json, "feed", "filters", "search", "agentic", "--json")
+    assert '"topics": [' in filter_search_json.output
 
 
 def test_cli_public_context_and_paper_reads_smoke(
@@ -95,6 +131,14 @@ def test_cli_public_context_and_paper_reads_smoke(
     assert_cli_ok(overview_status, "paper", "overview-status", SMOKE_PAPER_ID)
     assert "Overview Status" in overview_status.output
     assert "en" in overview_status.output
+
+    overview_status_json = invoke_cli(
+        cli_runner,
+        ["paper", "overview-status", SMOKE_PAPER_ID, "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(overview_status_json, "paper", "overview-status", SMOKE_PAPER_ID, "--json")
+    assert '"version_id"' in overview_status_json.output
 
     full_text = invoke_cli(
         cli_runner,

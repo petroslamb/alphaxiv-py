@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0 - 2026-03-17
+
+- Added NotebookLM-style agent UX improvements with built-in `guide`, `skill`,
+  and `agent` command groups.
+- Added stable `--json` output across the main read and discovery commands for
+  agent-safe structured output, while keeping `--raw` as the backend-shaped
+  debug surface.
+- Added packaged runtime assets and install/status/show/uninstall flows for
+  Codex, Claude Code, and OpenCode integrations.
+- Added representative live JSON smoke coverage for `feed`, `assistant`, and
+  `folders` reads, plus unit coverage for the new guide, skill, and JSON
+  surfaces.
+
 ## 0.2.0 - 2026-03-16
 
 - Reorganized the CLI around resource-first groups such as `auth`, `context`,

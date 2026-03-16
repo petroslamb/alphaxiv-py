@@ -1,6 +1,6 @@
 [project]
 name = "alphaxiv-py"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python SDK and CLI for alphaXiv public research APIs"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -46,6 +46,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alphaxiv"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/alphaxiv" = "alphaxiv/data/skills/alphaxiv"
+"integrations/claude-code" = "alphaxiv/data/integrations/claude-code"
+"integrations/opencode" = "alphaxiv/data/integrations/opencode"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

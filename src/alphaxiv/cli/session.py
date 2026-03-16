@@ -16,12 +16,14 @@ from .helpers import (
     load_assistant_context,
     load_context,
     make_client,
+    print_json,
     render_assistant_context_table,
     render_context_table,
     run_async,
     save_assistant_context,
     save_context,
 )
+from .serialize import serialize_assistant_context, serialize_resolved_paper
 
 context = WrappedHelpGroup(
     "context",
@@ -85,12 +87,19 @@ def _show_missing_assistant_context() -> None:
     console.print(f"[dim]Expected assistant context file: {get_assistant_context_path()}[/dim]")
 
 
-def _show_paper_context() -> None:
+def _resolved_current_paper() -> ResolvedPaper | None:
     resolved = load_context()
+    if not resolved:
+        return None
+    return hydrate_paper_context_title(resolved)
+
+
+def _show_paper_context() -> None:
+    resolved = _resolved_current_paper()
     if not resolved:
         _show_missing_paper_context()
         return
-    console.print(render_context_table(hydrate_paper_context_title(resolved)))
+    console.print(render_context_table(resolved))
 
 
 def _show_assistant_context() -> None:
@@ -103,9 +112,18 @@ def _show_assistant_context() -> None:
 
 @context.group("show", cls=WrappedHelpGroup, invoke_without_command=True)
 @click.pass_context
-def show_group(ctx: click.Context) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_group(ctx: click.Context, json_output: bool) -> None:
     """Show the saved paper context, assistant context, or both together."""
     if ctx.invoked_subcommand is not None:
+        return
+    if json_output:
+        print_json(
+            {
+                "paper": serialize_resolved_paper(_resolved_current_paper()),
+                "assistant": serialize_assistant_context(load_assistant_context()),
+            }
+        )
         return
     _show_paper_context()
     console.print()
@@ -113,14 +131,22 @@ def show_group(ctx: click.Context) -> None:
 
 
 @show_group.command("paper")
-def show_paper_context() -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_paper_context(json_output: bool) -> None:
     """Show only the saved current paper, including title and resolved ids."""
+    if json_output:
+        print_json(serialize_resolved_paper(_resolved_current_paper()))
+        return
     _show_paper_context()
 
 
 @show_group.command("assistant")
-def show_assistant_context() -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_assistant_context(json_output: bool) -> None:
     """Show only the saved current assistant session."""
+    if json_output:
+        print_json(serialize_assistant_context(load_assistant_context()))
+        return
     _show_assistant_context()
 
 

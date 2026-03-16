@@ -55,6 +55,9 @@ def test_top_level_help_shows_only_groups() -> None:
     assert "paper" in result.output
     assert "assistant" in result.output
     assert "folders" in result.output
+    assert "guide" in result.output
+    assert "skill" in result.output
+    assert "agent" in result.output
     assert "\n  comments  " not in result.output
     assert "\n  status" not in result.output
     assert "clear   Clear the saved paper context" not in result.output
@@ -69,15 +72,18 @@ def test_group_help_wraps_without_ellipsis() -> None:
     assistant_help = runner.invoke(cli, ["assistant", "--help"])
     search_help = runner.invoke(cli, ["search", "--help"])
     comment_help = runner.invoke(cli, ["paper", "comments", "--help"])
+    guide_help = runner.invoke(cli, ["guide", "--help"])
 
     assert paper_help.exit_code == 0
     assert assistant_help.exit_code == 0
     assert search_help.exit_code == 0
     assert comment_help.exit_code == 0
+    assert guide_help.exit_code == 0
     assert "readable text extracted from the paper PDF" in paper_help.output
     assert "grounded in one paper" in assistant_help.output
     assert "Use `feed` when you want recent" in search_help.output
     assert "comment actions" in comment_help.output
+    assert "higher-level alphaXiv workflows" in guide_help.output
 
 
 def test_removed_commands_fail_cleanly() -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from tests.e2e.helpers import (
     SMOKE_PAPER_ID,
@@ -44,6 +46,16 @@ def test_cli_auth_status_and_assistant_reads_smoke(
     assert_cli_ok(sessions_result, "assistant", "list", "--limit", "1")
     assert "Assistant Sessions" in sessions_result.output
 
+    sessions_json = invoke_cli(
+        cli_runner,
+        ["assistant", "list", "--limit", "1", "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(sessions_json, "assistant", "list", "--limit", "1", "--json")
+    sessions_payload = json.loads(sessions_json.output)
+    assert sessions_payload["limit"] == 1
+    assert "sessions" in sessions_payload
+
 
 def test_cli_auth_folders_list_smoke(
     cli_runner,
@@ -55,6 +67,12 @@ def test_cli_auth_folders_list_smoke(
     folders_result = invoke_cli(cli_runner, ["folders", "list"], env=isolated_cli_env)
     assert_cli_ok(folders_result, "folders", "list")
     assert "alphaXiv Folders" in folders_result.output
+
+    folders_json = invoke_cli(cli_runner, ["folders", "list", "--json"], env=isolated_cli_env)
+    assert_cli_ok(folders_json, "folders", "list", "--json")
+    folders_payload = json.loads(folders_json.output)
+    assert "folders" in folders_payload
+    assert isinstance(folders_payload["folders"], list)
 
 
 def test_cli_auth_folder_show_and_paper_membership_smoke(

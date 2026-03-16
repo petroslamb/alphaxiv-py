@@ -61,19 +61,23 @@ Users create API keys in the alphaXiv web app. This package does not create or m
 ## CLI Quick Start
 
 The CLI is resource-first. The top-level surface is grouped into `auth`, `context`, `search`,
-`feed`, `paper`, `assistant`, and `folders`.
+`feed`, `paper`, `assistant`, `folders`, `guide`, `skill`, and `agent`.
 
 ```bash
 export ALPHAXIV_API_KEY="axv1_..."
 alphaxiv auth set-api-key --api-key "$ALPHAXIV_API_KEY"
 alphaxiv auth status
+alphaxiv guide research
 alphaxiv context use paper 2603.04379
 alphaxiv context show
+alphaxiv context show --json
 alphaxiv search all "graph neural networks for molecules"
 alphaxiv search papers "graph neural networks for molecules"
+alphaxiv search papers "graph neural networks for molecules" --json
 alphaxiv search organizations "graph neural networks for molecules"
 alphaxiv search topics "graph neural networks for molecules"
 alphaxiv assistant list
+alphaxiv assistant list --json
 alphaxiv assistant model
 alphaxiv assistant url-metadata https://github.com/PKU-YuanGroup/Helios
 alphaxiv assistant set-model "Claude 4.6 Sonnet"
@@ -83,12 +87,14 @@ alphaxiv assistant reply "Focus on the most cited ones"
 alphaxiv assistant history
 alphaxiv feed filters
 alphaxiv feed filters search "agentic"
+alphaxiv feed filters search "agentic" --json
 alphaxiv feed list --sort likes --limit 5
 alphaxiv feed list --organization MIT --source twitter --limit 5
 alphaxiv feed list --topic agentic-frameworks --organization Meta --limit 5
 alphaxiv paper show
 alphaxiv paper abstract
 alphaxiv paper summary
+alphaxiv paper summary --json
 alphaxiv paper comments list
 alphaxiv paper comments add --body "Helpful note"
 alphaxiv paper comments reply <comment-id> --body "Thanks"
@@ -107,9 +113,15 @@ alphaxiv paper resources --transcript
 alphaxiv paper pdf url
 alphaxiv paper pdf download ./helios.pdf
 alphaxiv folders list --papers
+alphaxiv skill install
+alphaxiv skill status --scope all --json
+alphaxiv agent show codex
 alphaxiv context clear
 alphaxiv auth clear
 ```
+
+`--json` is the stable machine-readable output mode for automation and agents.
+`--raw` stays available on selected commands when you want the backend-shaped payload for debugging.
 
 ## Python Quick Start
 
@@ -180,28 +192,59 @@ asyncio.run(main())
 
 `AlphaXivClient.from_saved_api_key()` loads `ALPHAXIV_API_KEY` first and then falls back to `~/.alphaxiv/api-key.json`.
 
-## Optional Codex Skill
+## Agent Integrations
 
-This repo also ships an optional Codex skill for agent-driven CLI usage:
+This repo ships agent-facing guidance in two forms:
+
+- built-in workflow guides through `alphaxiv guide ...`
+- packaged integrations installable through `alphaxiv skill ...`
+
+The repo-root Codex skill is also published for discovery:
 
 - [Skill entry point](skills/alphaxiv/SKILL.md)
 - [Skill workflows](skills/alphaxiv/references/workflows.md)
 - [Skill command map](skills/alphaxiv/references/command-map.md)
 
-The skill helps agents choose between `search`, `feed`, `paper`, `assistant`,
-`context`, and `auth` without changing the CLI surface. It is not installed by
-`pip install alphaxiv-py`.
-
-To install it into a local Codex setup, copy the skill directory into
-`$CODEX_HOME/skills` (or `~/.codex/skills` if `CODEX_HOME` is unset):
+Install the packaged integrations with the CLI:
 
 ```bash
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-cp -R skills/alphaxiv "${CODEX_HOME:-$HOME/.codex}/skills/alphaxiv"
+alphaxiv skill install
+alphaxiv skill status --scope all
+alphaxiv skill show --target source
+alphaxiv agent show codex
 ```
 
-Restart Codex after copying the skill. If you are updating an existing local
-copy, replace the old `alphaxiv` skill directory first.
+Supported targets in this release:
+
+- Codex
+- Claude Code
+- OpenCode
+
+`skill install` defaults to user scope and installs all supported targets. Use
+`--scope project` to install into the current project instead.
+
+## LLM Agent Tips
+
+If an agent is driving the CLI, the intended flow is:
+
+1. use `search` for keyword lookup
+2. use `feed` for recent or ranked discovery
+3. use `paper` to inspect one paper
+4. use `assistant` after retrieval for synthesis or follow-up reasoning
+5. use `context` when several commands target the same paper or chat
+
+Output modes:
+
+- use `--json` for stable machine-readable command output
+- use `--raw` only when you need the backend-shaped payload for debugging
+
+High-confusion distinctions:
+
+- `paper abstract` = original abstract
+- `paper summary` = short AI digest
+- `paper overview` = long AI write-up
+- `paper text` = readable text extracted from the PDF
+- `paper pdf download` = actual PDF file
 
 ## Docs
 

@@ -29,6 +29,12 @@ from .helpers import (
     save_assistant_context,
 )
 from .messages import alpha_error_to_click_exception
+from .serialize import (
+    reject_raw_and_json,
+    serialize_assistant_message,
+    serialize_assistant_session,
+    serialize_url_metadata,
+)
 
 assistant = WrappedHelpGroup(
     "assistant",
@@ -248,9 +254,19 @@ def _message_sort_key(message: AssistantMessage) -> tuple[float, str]:
     show_default=True,
     help="Maximum number of sessions to print after sorting by newest message.",
 )
-def list_sessions(paper_id: str | None, limit: int) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def list_sessions(paper_id: str | None, limit: int, json_output: bool) -> None:
     """List saved assistant chats for the homepage or for one paper."""
     sessions = fetch_sessions(paper_id=paper_id, limit=limit)
+    if json_output:
+        print_json(
+            {
+                "paper_id": paper_id,
+                "limit": limit,
+                "sessions": [serialize_assistant_session(session) for session in sessions],
+            }
+        )
+        return
     title = "Paper Assistant Sessions" if paper_id else "Homepage Assistant Sessions"
     table = Table(title=title)
     table.add_column("Session ID")
@@ -274,24 +290,33 @@ def set_model(model: str) -> None:
 
 
 @assistant.command("model")
-def show_model() -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_model(json_output: bool) -> None:
     """Show the preferred assistant model currently stored in alphaXiv."""
     model = fetch_preferred_model()
+    if json_output:
+        print_json({"model": model})
+        return
     console.print(f"[bold]Preferred assistant model:[/bold] {model}")
 
 
 @assistant.command("url-metadata")
 @click.argument("url")
 @click.option("--raw", is_flag=True, help="Print the raw metadata JSON payload.")
-def show_url_metadata(url: str, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_url_metadata(url: str, raw: bool, json_output: bool) -> None:
     """Fetch the assistant's link-preview metadata for one URL.
 
     Use this when you want the assistant's title/description preview for a link before
     discussing or sharing it in a chat.
     """
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv assistant url-metadata --help")
     metadata = fetch_url_metadata(url)
     if raw:
         print_json(metadata.raw)
+        return
+    if json_output:
+        print_json(serialize_url_metadata(metadata))
         return
     table = Table(title="Assistant URL Metadata")
     table.add_column("Field")
@@ -428,16 +453,26 @@ def reply_chat(
 @assistant.command("history")
 @click.argument("session_id", required=False)
 @click.option("--raw", is_flag=True, help="Print raw message payloads.")
-def show_history(session_id: str | None, raw: bool) -> None:
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def show_history(session_id: str | None, raw: bool, json_output: bool) -> None:
     """Show the full message history for the current or selected assistant chat.
 
     Use this when you need the full transcript of a saved assistant session instead of
     sending a new message.
     """
+    reject_raw_and_json(raw, json_output, see_help="alphaxiv assistant history --help")
     effective_session_id = get_effective_session_id(session_id)
     history = fetch_history(effective_session_id)
     if raw:
         print_json([message.raw for message in history])
+        return
+    if json_output:
+        print_json(
+            {
+                "session_id": effective_session_id,
+                "messages": [serialize_assistant_message(message) for message in history],
+            }
+        )
         return
 
     console.print(f"[bold]Assistant History[/bold] {effective_session_id}")
