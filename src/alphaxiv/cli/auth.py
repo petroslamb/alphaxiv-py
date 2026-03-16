@@ -17,7 +17,13 @@ from .helpers import console, refresh_api_key_user, render_api_key_table
 
 auth = WrappedHelpGroup(
     "auth",
-    help="Validate, inspect, and clear the alphaXiv API key used by the CLI.",
+    help=(
+        "Configure the alphaXiv API key used by authenticated commands.\n\n"
+        "Examples:\n"
+        "  alphaxiv auth set-api-key\n"
+        "  alphaxiv auth status\n"
+        "  alphaxiv auth clear"
+    ),
 )
 
 
@@ -34,7 +40,7 @@ def _load_display_api_key():
     help="Explicit alphaXiv API key to validate and save. Prompts securely if omitted.",
 )
 def set_api_key(api_key: str | None) -> None:
-    """Validate an API key against alphaXiv and store it in api-key.json."""
+    """Validate an API key and store it locally for future CLI commands."""
     resolved_api_key = api_key
     if resolved_api_key is None:
         resolved_api_key = click.prompt("alphaXiv API key", hide_input=True)
@@ -54,7 +60,7 @@ def set_api_key(api_key: str | None) -> None:
 
 @auth.command("status")
 def status() -> None:
-    """Show which API key source is active and who it resolves to."""
+    """Show whether the CLI is authenticated and which key source is active."""
     saved_api_key = _load_display_api_key()
     if saved_api_key:
         console.print(render_api_key_table(saved_api_key))
@@ -68,7 +74,7 @@ def status() -> None:
 
 @auth.command("clear")
 def clear() -> None:
-    """Remove the saved local API key."""
+    """Remove the saved local API key from disk."""
     had_api_key = get_api_key_path().exists()
     clear_saved_api_key()
     if had_api_key:

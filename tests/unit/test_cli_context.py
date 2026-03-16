@@ -150,6 +150,19 @@ def test_context_use_paper_and_show(monkeypatch, tmp_path) -> None:
     assert "No current assistant chat is set" in status.output
 
 
+def test_missing_current_paper_shows_guided_suggestions(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+
+    result = runner.invoke(cli, ["paper", "show"])
+
+    assert result.exit_code != 0
+    assert "No current paper is set." in result.output
+    assert "alphaxiv context use paper <paper-id>" in result.output
+    assert "alphaxiv paper show <paper-id>" in result.output
+    assert "See: alphaxiv context --help" in result.output
+
+
 def test_context_show_paper_hydrates_missing_title(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
@@ -395,6 +408,30 @@ def test_paper_summary_uses_current_context(monkeypatch, tmp_path) -> None:
     assert "Results" in result.output
 
 
+def test_paper_summary_without_structured_summary_shows_fallbacks(monkeypatch) -> None:
+    runner = CliRunner()
+    overview = PaperOverview(
+        version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
+        language="en",
+        title="Helios",
+        abstract="We introduce Helios.",
+        summary=None,
+        overview_markdown="## Overview",
+        intermediate_report=None,
+        citations=[],
+        raw={},
+    )
+    monkeypatch.setattr(paper_cli, "fetch_overview", lambda _identifier, language="en": overview)
+
+    result = runner.invoke(cli, ["paper", "summary", "2603.04379"])
+
+    assert result.exit_code != 0
+    assert "No structured overview summary was available for 'Helios'." in result.output
+    assert "alphaxiv paper abstract 2603.04379" in result.output
+    assert "alphaxiv paper overview 2603.04379" in result.output
+    assert "alphaxiv paper text 2603.04379" in result.output
+
+
 def test_paper_text_uses_current_context(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
@@ -417,6 +454,28 @@ def test_paper_text_uses_current_context(monkeypatch, tmp_path) -> None:
     assert "2603.04379v1" in result.output
     assert "Page 2" in result.output
     assert "Long video generation" in result.output
+
+
+def test_paper_text_missing_pages_shows_guided_suggestions(monkeypatch) -> None:
+    runner = CliRunner()
+    resolved = _resolved("2603.04379")
+    full_text = PaperFullText(
+        resolved=resolved,
+        pages=[
+            PaperTextPage(page_number=1, text="Abstract\nWe introduce Helios.", raw={}),
+            PaperTextPage(page_number=2, text="1 Introduction\nLong video generation...", raw={}),
+        ],
+        raw={},
+    )
+    monkeypatch.setattr(paper_cli, "fetch_full_text", lambda _identifier: full_text)
+
+    result = runner.invoke(cli, ["paper", "text", "2603.04379", "--page", "4"])
+
+    assert result.exit_code != 0
+    assert "Requested pages were not available: 4." in result.output
+    assert "alphaxiv paper text 2603.04379" in result.output
+    assert "alphaxiv paper text 2603.04379 --page 1" in result.output
+    assert "See: alphaxiv paper text --help" in result.output
 
 
 def test_resources_bibtex_command(monkeypatch) -> None:

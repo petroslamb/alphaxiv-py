@@ -180,6 +180,29 @@ asyncio.run(main())
 
 `AlphaXivClient.from_saved_api_key()` loads `ALPHAXIV_API_KEY` first and then falls back to `~/.alphaxiv/api-key.json`.
 
+## Optional Codex Skill
+
+This repo also ships an optional Codex skill for agent-driven CLI usage:
+
+- [Skill entry point](skills/alphaxiv/SKILL.md)
+- [Skill workflows](skills/alphaxiv/references/workflows.md)
+- [Skill command map](skills/alphaxiv/references/command-map.md)
+
+The skill helps agents choose between `search`, `feed`, `paper`, `assistant`,
+`context`, and `auth` without changing the CLI surface. It is not installed by
+`pip install alphaxiv-py`.
+
+To install it into a local Codex setup, copy the skill directory into
+`$CODEX_HOME/skills` (or `~/.codex/skills` if `CODEX_HOME` is unset):
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/alphaxiv "${CODEX_HOME:-$HOME/.codex}/skills/alphaxiv"
+```
+
+Restart Codex after copying the skill. If you are updating an existing local
+copy, replace the old `alphaxiv` skill directory first.
+
 ## Docs
 
 - [CLI reference](docs/cli-reference.md)

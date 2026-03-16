@@ -1,0 +1,7 @@
+interface:
+  display_name: "alphaXiv CLI"
+  short_description: "Research workflows for the alphaXiv CLI"
+  default_prompt: "Use $alphaxiv to choose the right alphaXiv CLI workflow for searching papers, inspecting one paper, or using the assistant from the terminal."
+
+policy:
+  allow_implicit_invocation: true

@@ -27,9 +27,12 @@ context = WrappedHelpGroup(
     "context",
     help=(
         "Inspect or update the saved paper and assistant context.\n\n"
+        "Many `paper` commands can omit `[paper-id]` if a current paper is saved here. "
+        "Assistant replies can also continue the saved current chat.\n\n"
         "Examples:\n"
         "  alphaxiv context show\n"
         "  alphaxiv context use paper 1706.03762\n"
+        "  alphaxiv context clear paper\n"
         "  alphaxiv context use assistant session-existing"
     ),
 )
@@ -111,25 +114,25 @@ def show_group(ctx: click.Context) -> None:
 
 @show_group.command("paper")
 def show_paper_context() -> None:
-    """Show only the saved paper context."""
+    """Show only the saved current paper, including title and resolved ids."""
     _show_paper_context()
 
 
 @show_group.command("assistant")
 def show_assistant_context() -> None:
-    """Show only the saved assistant context."""
+    """Show only the saved current assistant session."""
     _show_assistant_context()
 
 
 @context.group("use", cls=WrappedHelpGroup)
 def use_group() -> None:
-    """Set the saved current paper or assistant session context."""
+    """Set the saved current paper or current assistant session."""
 
 
 @use_group.command("paper")
 @click.argument("paper_id")
 def use_paper_context(paper_id: str) -> None:
-    """Resolve a paper identifier and save it as the current paper context."""
+    """Resolve a paper id and save it as the default paper for later commands."""
     resolved = resolve_paper_identifier(paper_id)
     path = save_context(resolved)
     console.print(f"[green]Current paper set:[/green] {resolved.preferred_id}")
@@ -139,7 +142,7 @@ def use_paper_context(paper_id: str) -> None:
 @use_group.command("assistant")
 @click.argument("session_id")
 def use_assistant_context(session_id: str) -> None:
-    """Save an assistant session id as the current assistant context."""
+    """Save an assistant session id as the default chat for later replies."""
     from .assistant import resolve_context_for_session
 
     resolved = resolve_context_for_session(session_id)
@@ -183,11 +186,11 @@ def clear_group(ctx: click.Context) -> None:
 
 @clear_group.command("paper")
 def clear_paper_context() -> None:
-    """Clear only the saved paper context."""
+    """Clear only the saved current paper."""
     _print_clear_result(cleared_paper=_clear_paper_context(), cleared_assistant=False)
 
 
 @clear_group.command("assistant")
 def clear_assistant_context_command() -> None:
-    """Clear only the saved assistant context."""
+    """Clear only the saved current assistant session."""
     _print_clear_result(cleared_paper=False, cleared_assistant=_clear_assistant_chat_context())

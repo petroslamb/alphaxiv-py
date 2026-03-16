@@ -12,7 +12,12 @@ from .cli.grouped import WrappedHelpGroup
 @click.group(cls=WrappedHelpGroup)
 @click.version_option(version=__version__, prog_name="alphaXiv CLI")
 def cli() -> None:
-    """Explore alphaXiv public APIs and authenticated assistant features."""
+    """Explore alphaXiv from the terminal.
+
+    Typical workflow: use `search` or `feed` to discover papers, `paper` to inspect
+    metadata and full text, `assistant` to ask follow-up questions, and `context`
+    to save the current paper or assistant session between commands.
+    """
 
 
 cli.add_command(auth)

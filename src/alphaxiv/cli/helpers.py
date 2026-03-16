@@ -8,14 +8,15 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-import click
 from rich.console import Console
 from rich.table import Table
 
 from ..auth import SavedApiKey, fetch_current_user, load_api_key_value
 from ..client import AlphaXivClient
+from ..exceptions import AlphaXivError
 from ..paths import ensure_home_path, get_assistant_context_path, get_context_path
 from ..types import AssistantContext, ResolvedPaper
+from .messages import alpha_error_to_click_exception, click_error
 
 console = Console()
 
@@ -23,6 +24,23 @@ console = Console()
 def run_async(awaitable):
     """Run an async function from the CLI."""
     return asyncio.run(awaitable)
+
+
+def run_async_with_click_errors(
+    awaitable,
+    *,
+    suggestions: tuple[str, ...] | list[str] = (),
+    see_help: str | None = None,
+):
+    """Run an async function and translate alphaXiv SDK errors into Click errors."""
+    try:
+        return run_async(awaitable)
+    except AlphaXivError as exc:
+        raise alpha_error_to_click_exception(
+            exc,
+            suggestions=suggestions,
+            see_help=see_help,
+        ) from exc
 
 
 def make_client() -> AlphaXivClient:
@@ -92,8 +110,13 @@ def get_effective_identifier(paper_id: str | None) -> str:
         return paper_id
     current = load_context()
     if not current:
-        raise click.ClickException(
-            "No current paper is set. Run 'alphaxiv context use paper <paper-id>' or pass a paper id explicitly."
+        raise click_error(
+            "No current paper is set.",
+            suggestions=(
+                "alphaxiv context use paper <paper-id>",
+                "alphaxiv paper show <paper-id>",
+            ),
+            see_help="alphaxiv context --help",
         )
     return current.preferred_id
 
@@ -104,9 +127,14 @@ def get_effective_session_id(session_id: str | None) -> str:
         return session_id
     current = load_assistant_context()
     if not current:
-        raise click.ClickException(
-            "No current assistant chat is set. Run 'alphaxiv context use assistant <session-id>' "
-            "or start a chat first."
+        raise click_error(
+            "No current assistant chat is set.",
+            suggestions=(
+                "alphaxiv assistant list",
+                'alphaxiv assistant start "<message>"',
+                "alphaxiv context use assistant <session-id>",
+            ),
+            see_help="alphaxiv assistant --help",
         )
     return current.session_id
 

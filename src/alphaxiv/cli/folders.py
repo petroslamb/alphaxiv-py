@@ -7,11 +7,17 @@ from rich.table import Table
 
 from ..types import Folder
 from .grouped import WrappedHelpGroup
-from .helpers import console, make_client, print_json, run_async
+from .helpers import console, make_client, print_json, run_async_with_click_errors
 
 folders = WrappedHelpGroup(
     "folders",
-    help="Inspect authenticated alphaXiv folders and the papers saved inside them.",
+    help=(
+        "Inspect authenticated alphaXiv folders and the papers saved inside them.\n\n"
+        "Examples:\n"
+        "  alphaxiv folders list\n"
+        "  alphaxiv folders list --papers\n"
+        '  alphaxiv folders show "Want to read"'
+    ),
 )
 
 
@@ -20,7 +26,7 @@ def fetch_folders() -> list[Folder]:
         async with make_client() as client:
             return await client.folders.list()
 
-    return run_async(_list())
+    return run_async_with_click_errors(_list(), see_help="alphaxiv folders --help")
 
 
 def fetch_folder(selector: str) -> Folder:
@@ -28,7 +34,14 @@ def fetch_folder(selector: str) -> Folder:
         async with make_client() as client:
             return await client.folders.get(selector)
 
-    return run_async(_get())
+    return run_async_with_click_errors(
+        _get(),
+        suggestions=(
+            "alphaxiv folders list",
+            'alphaxiv folders show "Want to read"',
+        ),
+        see_help="alphaxiv folders --help",
+    )
 
 
 def _render_folder_papers(folder: Folder) -> None:
@@ -58,7 +71,7 @@ def _render_folder_papers(folder: Folder) -> None:
 )
 @click.option("--raw", is_flag=True, help="Print the raw folders JSON payload.")
 def list_folders(show_papers: bool, raw: bool) -> None:
-    """List the folders available to the authenticated alphaXiv user."""
+    """List your alphaXiv folders, optionally including the papers inside them."""
     folder_items = fetch_folders()
     if raw:
         print_json([folder.raw for folder in folder_items])
@@ -90,7 +103,7 @@ def list_folders(show_papers: bool, raw: bool) -> None:
 @click.argument("folder")
 @click.option("--raw", is_flag=True, help="Print the raw folder JSON payload.")
 def show_folder(folder: str, raw: bool) -> None:
-    """Show a single folder and the full paper list loaded from alphaXiv."""
+    """Show one folder and the full paper list currently saved inside it."""
     folder_item = fetch_folder(folder)
     if raw:
         print_json(folder_item.raw)

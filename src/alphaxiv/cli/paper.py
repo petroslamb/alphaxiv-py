@@ -22,14 +22,26 @@ from ..types import (
     PaperTranscript,
 )
 from .grouped import WrappedHelpGroup
-from .helpers import console, get_effective_identifier, make_client, print_json, run_async
+from .helpers import (
+    console,
+    get_effective_identifier,
+    make_client,
+    print_json,
+    run_async_with_click_errors,
+)
+from .messages import click_error, usage_error
 
 paper = WrappedHelpGroup(
     "paper",
     help=(
-        "Inspect paper metadata, overviews, resources, comments, PDFs, and paper actions.\n\n"
+        "Inspect paper metadata, abstracts, AI summaries, full text, PDFs, comments, and paper actions.\n\n"
+        "Use `show` for identifiers and links, `abstract` for the original abstract, `summary` "
+        "for a short AI digest, `overview` for the long AI write-up, and `text` when you need "
+        "readable text extracted from the paper PDF.\n\n"
         "Examples:\n"
         "  alphaxiv paper show 1706.03762\n"
+        "  alphaxiv paper abstract 1706.03762\n"
+        "  alphaxiv paper text 1706.03762 --page 1 --page 2\n"
         "  alphaxiv paper overview 1706.03762 --language en\n"
         "  alphaxiv paper comments list 1706.03762\n"
         "  alphaxiv paper pdf download 1706.03762 ./paper.pdf"
@@ -39,7 +51,9 @@ paper = WrappedHelpGroup(
 paper_comments = WrappedHelpGroup(
     "comments",
     help=(
-        "List public paper comments and run authenticated comment mutations.\n\n"
+        "List public paper comments and run authenticated comment actions.\n\n"
+        "Use `list` to read the thread, `add` or `reply` to post, and `upvote` or "
+        "`delete` for comment-level mutations.\n\n"
         "Examples:\n"
         "  alphaxiv paper comments list 1706.03762\n"
         '  alphaxiv paper comments add 1706.03762 --body "Helpful overview" --tag general\n'
@@ -49,13 +63,16 @@ paper_comments = WrappedHelpGroup(
 
 paper_pdf = WrappedHelpGroup(
     "pdf",
-    help="Resolve or download the public PDF for a paper.",
+    help=(
+        "Resolve or download the public PDF for a paper.\n\n"
+        "Use `url` to print the resolved PDF URL or `download` to save the file locally."
+    ),
 )
 
 paper_folders = WrappedHelpGroup(
     "folders",
     help=(
-        "Inspect or mutate the authenticated folder membership for a paper.\n\n"
+        "Inspect or change which of your folders contain a paper.\n\n"
         "Examples:\n"
         "  alphaxiv paper folders list 1706.03762\n"
         '  alphaxiv paper folders add 1706.03762 "Want to read"\n'
@@ -69,7 +86,7 @@ def fetch_paper(identifier: str) -> Paper:
         async with make_client() as client:
             return await client.papers.get(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper --help")
 
 
 def fetch_overview(identifier: str, language: str = "en") -> PaperOverview:
@@ -77,7 +94,14 @@ def fetch_overview(identifier: str, language: str = "en") -> PaperOverview:
         async with make_client() as client:
             return await client.papers.overview(identifier, language=language)
 
-    return run_async(_get())
+    return run_async_with_click_errors(
+        _get(),
+        suggestions=(
+            f"alphaxiv paper abstract {identifier}",
+            f"alphaxiv paper text {identifier}",
+        ),
+        see_help="alphaxiv paper --help",
+    )
 
 
 def fetch_resources(identifier: str) -> PaperResources:
@@ -85,7 +109,7 @@ def fetch_resources(identifier: str) -> PaperResources:
         async with make_client() as client:
             return await client.papers.resources(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper --help")
 
 
 def fetch_overview_status(identifier: str) -> OverviewStatus:
@@ -93,7 +117,7 @@ def fetch_overview_status(identifier: str) -> OverviewStatus:
         async with make_client() as client:
             return await client.papers.overview_status(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper --help")
 
 
 def fetch_transcript(identifier: str) -> PaperTranscript:
@@ -101,7 +125,7 @@ def fetch_transcript(identifier: str) -> PaperTranscript:
         async with make_client() as client:
             return await client.papers.transcript(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper --help")
 
 
 def fetch_bibtex(identifier: str) -> str | None:
@@ -109,7 +133,7 @@ def fetch_bibtex(identifier: str) -> str | None:
         async with make_client() as client:
             return await client.papers.bibtex(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper resources --help")
 
 
 def fetch_full_text(identifier: str) -> PaperFullText:
@@ -117,7 +141,11 @@ def fetch_full_text(identifier: str) -> PaperFullText:
         async with make_client() as client:
             return await client.papers.full_text(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(
+        _get(),
+        suggestions=(f"alphaxiv paper pdf download {identifier} ./paper.pdf",),
+        see_help="alphaxiv paper text --help",
+    )
 
 
 def fetch_comments(identifier: str) -> list[PaperComment]:
@@ -125,7 +153,7 @@ def fetch_comments(identifier: str) -> list[PaperComment]:
         async with make_client() as client:
             return await client.papers.comments(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper comments --help")
 
 
 def fetch_similar(identifier: str, limit: int | None = None) -> list[FeedCard]:
@@ -133,7 +161,7 @@ def fetch_similar(identifier: str, limit: int | None = None) -> list[FeedCard]:
         async with make_client() as client:
             return await client.papers.similar(identifier, limit=limit)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper similar --help")
 
 
 def create_comment(
@@ -152,7 +180,7 @@ def create_comment(
                 tag=tag,
             )
 
-    return run_async(_create())
+    return run_async_with_click_errors(_create(), see_help="alphaxiv paper comments --help")
 
 
 def reply_to_comment(
@@ -173,7 +201,7 @@ def reply_to_comment(
                 tag=tag,
             )
 
-    return run_async(_reply())
+    return run_async_with_click_errors(_reply(), see_help="alphaxiv paper comments --help")
 
 
 def toggle_comment_upvote(comment_id: str) -> dict[str, object] | None:
@@ -181,7 +209,7 @@ def toggle_comment_upvote(comment_id: str) -> dict[str, object] | None:
         async with make_client() as client:
             return await client.comments.toggle_upvote(comment_id)
 
-    return run_async(_toggle())
+    return run_async_with_click_errors(_toggle(), see_help="alphaxiv paper comments --help")
 
 
 def delete_comment(comment_id: str) -> None:
@@ -189,7 +217,7 @@ def delete_comment(comment_id: str) -> None:
         async with make_client() as client:
             await client.comments.delete(comment_id)
 
-    run_async(_delete())
+    run_async_with_click_errors(_delete(), see_help="alphaxiv paper comments --help")
 
 
 def toggle_vote(identifier: str) -> dict[str, object] | None:
@@ -197,7 +225,7 @@ def toggle_vote(identifier: str) -> dict[str, object] | None:
         async with make_client() as client:
             return await client.papers.toggle_vote(identifier)
 
-    return run_async(_toggle())
+    return run_async_with_click_errors(_toggle(), see_help="alphaxiv paper --help")
 
 
 def record_view(identifier: str) -> dict[str, object] | None:
@@ -205,7 +233,7 @@ def record_view(identifier: str) -> dict[str, object] | None:
         async with make_client() as client:
             return await client.papers.record_view(identifier)
 
-    return run_async(_record())
+    return run_async_with_click_errors(_record(), see_help="alphaxiv paper --help")
 
 
 def fetch_pdf_url(identifier: str) -> str:
@@ -213,7 +241,7 @@ def fetch_pdf_url(identifier: str) -> str:
         async with make_client() as client:
             return await client.papers.pdf_url(identifier)
 
-    return run_async(_get())
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper pdf --help")
 
 
 def fetch_pdf_download(identifier: str, path: str | Path) -> Path:
@@ -221,7 +249,7 @@ def fetch_pdf_download(identifier: str, path: str | Path) -> Path:
         async with make_client() as client:
             return await client.papers.download_pdf(identifier, path)
 
-    return run_async(_download())
+    return run_async_with_click_errors(_download(), see_help="alphaxiv paper pdf --help")
 
 
 def fetch_paper_folder_membership(identifier: str) -> tuple[str, str, list[Folder]]:
@@ -236,7 +264,14 @@ def fetch_paper_folder_membership(identifier: str) -> tuple[str, str, list[Folde
             folders = await client.folders.list()
             return resolved.preferred_id, resolved.group_id, folders
 
-    return run_async(_get())
+    return run_async_with_click_errors(
+        _get(),
+        suggestions=(
+            "alphaxiv paper folders list 1706.03762",
+            "alphaxiv paper show 1706.03762",
+        ),
+        see_help="alphaxiv paper folders --help",
+    )
 
 
 def add_paper_to_folder(identifier: str, folder_selector: str) -> Folder:
@@ -250,7 +285,14 @@ def add_paper_to_folder(identifier: str, folder_selector: str) -> Folder:
                 )
             return await client.folders.add_papers(folder_selector, [resolved.group_id])
 
-    return run_async(_add())
+    return run_async_with_click_errors(
+        _add(),
+        suggestions=(
+            'alphaxiv paper folders add 1706.03762 "Want to read"',
+            "alphaxiv paper show 1706.03762",
+        ),
+        see_help="alphaxiv paper folders --help",
+    )
 
 
 def remove_paper_from_folder(identifier: str, folder_selector: str) -> Folder:
@@ -264,7 +306,14 @@ def remove_paper_from_folder(identifier: str, folder_selector: str) -> Folder:
                 )
             return await client.folders.remove_papers(folder_selector, [resolved.group_id])
 
-    return run_async(_remove())
+    return run_async_with_click_errors(
+        _remove(),
+        suggestions=(
+            'alphaxiv paper folders remove 1706.03762 "Want to read"',
+            "alphaxiv paper show 1706.03762",
+        ),
+        see_help="alphaxiv paper folders --help",
+    )
 
 
 def _confirm_mutation(yes: bool, prompt: str) -> None:
@@ -330,11 +379,17 @@ def _render_paper_folder_membership(
     console.print(table)
 
 
-def _render_summary_sections(overview_obj: PaperOverview) -> None:
+def _render_summary_sections(overview_obj: PaperOverview, identifier: str) -> None:
     summary = overview_obj.summary
     if summary is None:
-        raise click.ClickException(
-            f"No structured overview summary was available for '{overview_obj.title}'."
+        raise click_error(
+            f"No structured overview summary was available for '{overview_obj.title}'.",
+            suggestions=(
+                f"alphaxiv paper abstract {identifier}",
+                f"alphaxiv paper overview {identifier}",
+                f"alphaxiv paper text {identifier}",
+            ),
+            see_help="alphaxiv paper --help",
         )
 
     console.print(f"[bold]{overview_obj.title}[/bold]")
@@ -359,7 +414,11 @@ def _render_summary_sections(overview_obj: PaperOverview) -> None:
 @paper.command("show")
 @click.argument("paper_id", required=False)
 def show_paper(paper_id: str | None) -> None:
-    """Show resolved identifiers and core metadata for a paper."""
+    """Show resolved ids, authors, topics, and core paper links.
+
+    Use this first when you want to confirm which paper you are looking at or inspect the
+    ids, topics, PDF URL, and source links before using other paper commands.
+    """
     identifier = get_effective_identifier(paper_id)
     paper_obj = fetch_paper(identifier)
 
@@ -380,7 +439,11 @@ def show_paper(paper_id: str | None) -> None:
 @paper.command("abstract")
 @click.argument("paper_id", required=False)
 def show_abstract(paper_id: str | None) -> None:
-    """Print the paper title and abstract from the main metadata payload."""
+    """Print the paper title and original abstract.
+
+    Use this for the author-written abstract. Use `paper summary` for the short AI digest
+    and `paper overview` for the longer AI write-up.
+    """
     identifier = get_effective_identifier(paper_id)
     paper_obj = fetch_paper(identifier)
     console.print(f"[bold]{paper_obj.version.title}[/bold]")
@@ -393,13 +456,17 @@ def show_abstract(paper_id: str | None) -> None:
 @click.option("--language", default="en", show_default=True, help="Overview language to request.")
 @click.option("--raw", is_flag=True, help="Print the raw structured summary JSON payload.")
 def show_summary(paper_id: str | None, language: str, raw: bool) -> None:
-    """Print the structured AI summary derived from the overview endpoint."""
+    """Print the short structured AI summary for a paper.
+
+    Use this when you want a quick AI digest. Use `paper abstract` for the original abstract
+    and `paper overview` for the longer generated write-up.
+    """
     identifier = get_effective_identifier(paper_id)
     overview_obj = fetch_overview(identifier, language=language)
     if raw:
         print_json(overview_obj.summary.raw if overview_obj.summary else {})
         return
-    _render_summary_sections(overview_obj)
+    _render_summary_sections(overview_obj, identifier)
 
 
 @paper.command("overview")
@@ -407,7 +474,11 @@ def show_summary(paper_id: str | None, language: str, raw: bool) -> None:
 @click.option("--language", default="en", show_default=True, help="Overview language to request.")
 @click.option("--machine", is_flag=True, help="Print the raw machine-readable overview markdown.")
 def paper_overview(paper_id: str | None, language: str, machine: bool) -> None:
-    """Show the generated paper overview in the selected language."""
+    """Show the long AI overview for a paper in the selected language.
+
+    Use this when the short summary is not enough and you want the full generated write-up.
+    Use `paper summary` for the shorter digest.
+    """
     identifier = get_effective_identifier(paper_id)
     overview_obj = fetch_overview(identifier, language=language)
     if machine:
@@ -422,7 +493,11 @@ def paper_overview(paper_id: str | None, language: str, machine: bool) -> None:
 @paper.command("overview-status")
 @click.argument("paper_id", required=False)
 def paper_overview_status(paper_id: str | None) -> None:
-    """Show overview generation state and available translation statuses."""
+    """Show whether the paper overview exists and which translations are available.
+
+    Use this to check if an overview has been generated yet before requesting `paper summary`
+    or `paper overview`.
+    """
     identifier = get_effective_identifier(paper_id)
     status_obj = fetch_overview_status(identifier)
     table = Table(title="Overview Status")
@@ -466,9 +541,20 @@ def paper_overview_status(paper_id: str | None) -> None:
     help="Print the AI audio summary transcript when available.",
 )
 def paper_resources(paper_id: str | None, show_bibtex: bool, show_transcript: bool) -> None:
-    """Show public paper resources, or print BibTeX or transcript directly."""
+    """Show related paper resources such as BibTeX, transcript, links, and implementations.
+
+    Use this when you want citations, implementation links, podcast artifacts, or the audio
+    transcript rather than the paper body itself.
+    """
     if show_bibtex and show_transcript:
-        raise click.ClickException("Use either --bibtex or --transcript, not both.")
+        raise click_error(
+            "Use either --bibtex or --transcript, not both.",
+            suggestions=(
+                "alphaxiv paper resources <paper-id> --bibtex",
+                "alphaxiv paper resources <paper-id> --transcript",
+            ),
+            see_help="alphaxiv paper resources --help",
+        )
 
     identifier = get_effective_identifier(paper_id)
     if show_bibtex:
@@ -516,10 +602,14 @@ def paper_resources(paper_id: str | None, show_bibtex: bool, show_transcript: bo
     "pages",
     multiple=True,
     type=int,
-    help="Print only the selected 1-based page numbers. Repeat to include multiple pages.",
+    help="Extract only the selected 1-based PDF pages. Repeat to include multiple pages.",
 )
 def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
-    """Print extracted paper text, optionally limited to specific page numbers."""
+    """Extract readable text from the paper PDF, optionally limited to specific pages.
+
+    Use this when you want the paper body as text. Use `paper pdf download` when you want the
+    original PDF file instead.
+    """
     identifier = get_effective_identifier(paper_id)
     full_text = fetch_full_text(identifier)
 
@@ -529,8 +619,13 @@ def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
         requested_pages = list(dict.fromkeys(pages))
         missing_pages = [page for page in requested_pages if page not in page_map]
         if missing_pages:
-            raise click.ClickException(
-                f"Requested pages were not available: {', '.join(str(page) for page in missing_pages)}"
+            raise click_error(
+                f"Requested pages were not available: {', '.join(str(page) for page in missing_pages)}.",
+                suggestions=(
+                    f"alphaxiv paper text {identifier}",
+                    f"alphaxiv paper text {identifier} --page 1",
+                ),
+                see_help="alphaxiv paper text --help",
             )
         selected_pages = [page_map[page_number] for page_number in requested_pages]
 
@@ -551,7 +646,7 @@ def show_text(paper_id: str | None, pages: tuple[int, ...]) -> None:
 @click.argument("paper_id", required=False)
 @click.option("--raw", is_flag=True, help="Print the raw folder payloads with membership context.")
 def list_paper_folders(paper_id: str | None, raw: bool) -> None:
-    """Show which folders currently contain the selected paper."""
+    """Show which of your folders currently contain the selected paper."""
     identifier = get_effective_identifier(paper_id)
     preferred_id, paper_group_id, folder_items = fetch_paper_folder_membership(identifier)
     if raw:
@@ -576,14 +671,21 @@ def list_paper_folders(paper_id: str | None, raw: bool) -> None:
 @click.argument("args", nargs=-1)
 @click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
 def add_paper_folder(args: tuple[str, ...], yes: bool) -> None:
-    """Save a paper into one of the authenticated user's folders."""
+    """Save a paper into one of your authenticated alphaXiv folders."""
     if len(args) == 1:
         paper_id = None
         folder_selector = args[0]
     elif len(args) == 2:
         paper_id, folder_selector = args
     else:
-        raise click.UsageError("Expected either <folder> or <paper-id> <folder>.")
+        raise usage_error(
+            "Expected either <folder> or <paper-id> <folder>.",
+            suggestions=(
+                'alphaxiv paper folders add "Want to read"',
+                'alphaxiv paper folders add 1706.03762 "Want to read"',
+            ),
+            see_help="alphaxiv paper folders --help",
+        )
 
     identifier = get_effective_identifier(paper_id)
     _confirm_mutation(yes, f"Save '{identifier}' into alphaXiv folder '{folder_selector}'?")
@@ -595,14 +697,21 @@ def add_paper_folder(args: tuple[str, ...], yes: bool) -> None:
 @click.argument("args", nargs=-1)
 @click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
 def remove_paper_folder(args: tuple[str, ...], yes: bool) -> None:
-    """Remove a paper from one of the authenticated user's folders."""
+    """Remove a paper from one of your authenticated alphaXiv folders."""
     if len(args) == 1:
         paper_id = None
         folder_selector = args[0]
     elif len(args) == 2:
         paper_id, folder_selector = args
     else:
-        raise click.UsageError("Expected either <folder> or <paper-id> <folder>.")
+        raise usage_error(
+            "Expected either <folder> or <paper-id> <folder>.",
+            suggestions=(
+                'alphaxiv paper folders remove "Want to read"',
+                'alphaxiv paper folders remove 1706.03762 "Want to read"',
+            ),
+            see_help="alphaxiv paper folders --help",
+        )
 
     identifier = get_effective_identifier(paper_id)
     _confirm_mutation(
@@ -644,7 +753,11 @@ def list_comments(paper_id: str | None, raw: bool) -> None:
     help="Comment tag to attach to the new top-level comment.",
 )
 def add_comment(paper_id: str | None, body: str, title: str | None, tag: str) -> None:
-    """Create a top-level authenticated comment for a paper."""
+    """Create a new top-level authenticated comment on a paper.
+
+    Use this to start a public discussion thread on the paper. Use `reply` to continue an
+    existing thread.
+    """
     identifier = get_effective_identifier(paper_id)
     comment = create_comment(identifier, body=body, title=title, tag=tag)
     console.print(f"[green]Created comment[/green] {comment.id} [green]for[/green] {identifier}")
@@ -662,14 +775,25 @@ def add_comment(paper_id: str | None, body: str, title: str | None, tag: str) ->
     help="Comment tag to attach to the new reply.",
 )
 def reply_comment(args: tuple[str, ...], body: str, title: str | None, tag: str) -> None:
-    """Reply to a comment by id, using paper context or an explicit paper id."""
+    """Reply to a comment id, using paper context or an explicit paper id.
+
+    Use this to continue an existing paper comment thread. Use `add` to start a new top-level
+    comment instead.
+    """
     if len(args) == 1:
         paper_id = None
         comment_id = args[0]
     elif len(args) == 2:
         paper_id, comment_id = args
     else:
-        raise click.UsageError("Expected either <comment-id> or <paper-id> <comment-id>.")
+        raise usage_error(
+            "Expected either <comment-id> or <paper-id> <comment-id>.",
+            suggestions=(
+                'alphaxiv paper comments reply comment-root --body "Thanks"',
+                'alphaxiv paper comments reply 1706.03762 comment-root --body "Thanks"',
+            ),
+            see_help="alphaxiv paper comments --help",
+        )
 
     identifier = get_effective_identifier(paper_id)
     comment = reply_to_comment(
@@ -686,7 +810,7 @@ def reply_comment(args: tuple[str, ...], body: str, title: str | None, tag: str)
 @click.argument("comment_id")
 @click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
 def upvote_comment(comment_id: str, yes: bool) -> None:
-    """Toggle the authenticated upvote state for a single comment id."""
+    """Toggle the authenticated upvote state for one comment id."""
     _confirm_mutation(yes, f"Toggle the alphaXiv upvote state for comment '{comment_id}'?")
     toggle_comment_upvote(comment_id)
     console.print(f"[green]Toggled comment upvote for[/green] {comment_id}")
@@ -696,7 +820,7 @@ def upvote_comment(comment_id: str, yes: bool) -> None:
 @click.argument("comment_id")
 @click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
 def remove_comment(comment_id: str, yes: bool) -> None:
-    """Delete a single authenticated comment by id."""
+    """Delete one of your authenticated comments by id."""
     _confirm_mutation(yes, f"Delete the alphaXiv comment '{comment_id}'?")
     delete_comment(comment_id)
     console.print(f"[green]Deleted comment[/green] {comment_id}")
@@ -712,7 +836,11 @@ def remove_comment(comment_id: str, yes: bool) -> None:
 )
 @click.option("--raw", is_flag=True, help="Print the raw similar-papers JSON payload.")
 def show_similar(paper_id: str | None, limit: int | None, raw: bool) -> None:
-    """Show papers returned by alphaXiv's similar-papers recommendation endpoint."""
+    """Show similar papers to expand or validate a shortlist.
+
+    Use this after finding one promising paper to discover nearby work or check whether your
+    shortlist is missing obvious neighbors.
+    """
     identifier = get_effective_identifier(paper_id)
     cards = fetch_similar(identifier, limit=limit)
     if raw:
@@ -728,7 +856,7 @@ def show_similar(paper_id: str | None, limit: int | None, raw: bool) -> None:
 @click.argument("paper_id", required=False)
 @click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
 def vote_for_paper(paper_id: str | None, yes: bool) -> None:
-    """Toggle the authenticated vote state for a paper's group id."""
+    """Toggle the authenticated vote state for a paper."""
     identifier = get_effective_identifier(paper_id)
     _confirm_mutation(yes, f"Toggle the alphaXiv vote state for '{identifier}'?")
     toggle_vote(identifier)
@@ -739,7 +867,7 @@ def vote_for_paper(paper_id: str | None, yes: bool) -> None:
 @click.argument("paper_id", required=False)
 @click.option("--yes", is_flag=True, help="Apply the mutation without a confirmation prompt.")
 def mark_paper_viewed(paper_id: str | None, yes: bool) -> None:
-    """Record an authenticated paper-view event for analytics or history."""
+    """Record an authenticated paper-view event."""
     identifier = get_effective_identifier(paper_id)
     _confirm_mutation(yes, f"Record a paper view for '{identifier}'?")
     record_view(identifier)
@@ -749,7 +877,11 @@ def mark_paper_viewed(paper_id: str | None, yes: bool) -> None:
 @paper_pdf.command("url")
 @click.argument("paper_id", required=False)
 def show_pdf_url(paper_id: str | None) -> None:
-    """Print the resolved fetcher URL for a paper's public PDF."""
+    """Print the resolved public PDF URL for a paper.
+
+    Use this when you need the fetchable PDF URL. Use `paper text` for extracted text or
+    `paper pdf download` to save the file.
+    """
     identifier = get_effective_identifier(paper_id)
     console.print(fetch_pdf_url(identifier))
 
@@ -765,7 +897,14 @@ def download_pdf(args: tuple[str, ...]) -> None:
         paper_id = args[0]
         path = Path(args[1])
     else:
-        raise click.UsageError("Expected either <path> or <paper-id> <path>.")
+        raise usage_error(
+            "Expected either <path> or <paper-id> <path>.",
+            suggestions=(
+                "alphaxiv paper pdf download ./paper.pdf",
+                "alphaxiv paper pdf download 1706.03762 ./paper.pdf",
+            ),
+            see_help="alphaxiv paper pdf --help",
+        )
 
     identifier = get_effective_identifier(paper_id)
     output_path = fetch_pdf_download(identifier, path)

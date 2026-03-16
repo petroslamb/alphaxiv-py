@@ -28,13 +28,18 @@ from .helpers import (
     run_async,
     save_assistant_context,
 )
+from .messages import alpha_error_to_click_exception
 
 assistant = WrappedHelpGroup(
     "assistant",
     help=(
-        "Use the authenticated alphaXiv assistant, session history, and related metadata APIs.\n\n"
+        "Use the authenticated alphaXiv assistant for paper questions and research chats.\n\n"
+        "Use `start` to begin a new chat, `reply` to continue the current chat, `list` and "
+        "`history` to inspect saved sessions, and `--paper` when you want the assistant "
+        "grounded in one paper.\n\n"
         "Examples:\n"
         "  alphaxiv assistant list\n"
+        '  alphaxiv assistant start "Summarize the most important ideas in this paper" --paper 1706.03762\n'
         '  alphaxiv assistant start "Find papers on agent frameworks"\n'
         '  alphaxiv assistant reply "Focus on the most cited ones"'
     ),
@@ -45,7 +50,7 @@ def _run_with_click_errors(awaitable):
     try:
         return run_async(awaitable)
     except AlphaXivError as exc:
-        raise click.ClickException(str(exc)) from exc
+        raise alpha_error_to_click_exception(exc, see_help="alphaxiv assistant --help") from exc
 
 
 def fetch_sessions(paper_id: str | None = None, limit: int | None = None) -> list[AssistantSession]:
@@ -244,7 +249,7 @@ def _message_sort_key(message: AssistantMessage) -> tuple[float, str]:
     help="Maximum number of sessions to print after sorting by newest message.",
 )
 def list_sessions(paper_id: str | None, limit: int) -> None:
-    """List saved assistant sessions for the homepage or a specific paper."""
+    """List saved assistant chats for the homepage or for one paper."""
     sessions = fetch_sessions(paper_id=paper_id, limit=limit)
     title = "Paper Assistant Sessions" if paper_id else "Homepage Assistant Sessions"
     table = Table(title=title)
@@ -263,14 +268,14 @@ def list_sessions(paper_id: str | None, limit: int) -> None:
 @assistant.command("set-model")
 @click.argument("model")
 def set_model(model: str) -> None:
-    """Persist the preferred assistant model in alphaXiv user preferences."""
+    """Save the preferred assistant model in alphaXiv user preferences."""
     selected = set_model_preference(model)
     console.print(f"[green]Preferred assistant model set:[/green] {selected}")
 
 
 @assistant.command("model")
 def show_model() -> None:
-    """Show the current preferred assistant model from alphaXiv user preferences."""
+    """Show the preferred assistant model currently stored in alphaXiv."""
     model = fetch_preferred_model()
     console.print(f"[bold]Preferred assistant model:[/bold] {model}")
 
@@ -279,7 +284,11 @@ def show_model() -> None:
 @click.argument("url")
 @click.option("--raw", is_flag=True, help="Print the raw metadata JSON payload.")
 def show_url_metadata(url: str, raw: bool) -> None:
-    """Fetch the assistant's link-preview metadata for a URL."""
+    """Fetch the assistant's link-preview metadata for one URL.
+
+    Use this when you want the assistant's title/description preview for a link before
+    discussing or sharing it in a chat.
+    """
     metadata = fetch_url_metadata(url)
     if raw:
         print_json(metadata.raw)
@@ -303,25 +312,25 @@ def show_url_metadata(url: str, raw: bool) -> None:
     "--paper",
     "paper_id",
     default=None,
-    help="Start a paper-scoped chat by resolving the paper to a version id first.",
+    help="Ground the new chat in one paper by resolving the paper id first.",
 )
 @click.option(
     "--model",
     default=None,
-    help="One-off assistant model label or wire id for this request only.",
+    help="Use a one-off assistant model label or wire id for this chat only.",
 )
 @click.option(
     "--web-search",
     type=click.Choice(["off", "full"], case_sensitive=False),
     default="off",
     show_default=True,
-    help="Whether the assistant may use alphaXiv's web-search mode for this request.",
+    help="Allow alphaXiv web search during this chat.",
 )
 @click.option(
     "--thinking/--no-thinking",
     default=True,
     show_default=True,
-    help="Request reasoning deltas in the streamed assistant response.",
+    help="Show reasoning-status events while the assistant is working.",
 )
 @click.option("--raw", is_flag=True, help="Print raw SSE event payloads.")
 def start_chat(
@@ -332,7 +341,11 @@ def start_chat(
     thinking: bool,
     raw: bool,
 ) -> None:
-    """Start a new assistant chat and save the created session as current."""
+    """Start a new assistant chat and save it as the current session.
+
+    Use `start` to begin a fresh conversation. Use `reply` when you want to continue the
+    saved current chat or target an existing session id.
+    """
     run = run_assistant_chat(
         message=message,
         paper_id=paper_id,
@@ -355,18 +368,18 @@ def start_chat(
     type=click.Choice(["off", "full"], case_sensitive=False),
     default="off",
     show_default=True,
-    help="Whether the assistant may use alphaXiv's web-search mode for this request.",
+    help="Allow alphaXiv web search during this reply.",
 )
 @click.option(
     "--model",
     default=None,
-    help="One-off assistant model label or wire id for this reply only.",
+    help="Use a one-off assistant model label or wire id for this reply only.",
 )
 @click.option(
     "--thinking/--no-thinking",
     default=True,
     show_default=True,
-    help="Request reasoning deltas in the streamed assistant response.",
+    help="Show reasoning-status events while the assistant is working.",
 )
 @click.option("--raw", is_flag=True, help="Print raw SSE event payloads.")
 def reply_chat(
@@ -376,7 +389,11 @@ def reply_chat(
     thinking: bool,
     raw: bool,
 ) -> None:
-    """Continue the current chat, or target an explicit session id first."""
+    """Continue the current chat, or reply to an explicit session id first.
+
+    Use `reply` after `assistant start` or after selecting a chat with
+    `context use assistant`. Use `start` if you want a new conversation.
+    """
     if len(parts) == 1:
         session_id = None
         message = parts[0]
@@ -412,7 +429,11 @@ def reply_chat(
 @click.argument("session_id", required=False)
 @click.option("--raw", is_flag=True, help="Print raw message payloads.")
 def show_history(session_id: str | None, raw: bool) -> None:
-    """Show message history for the current or explicitly selected assistant session."""
+    """Show the full message history for the current or selected assistant chat.
+
+    Use this when you need the full transcript of a saved assistant session instead of
+    sending a new message.
+    """
     effective_session_id = get_effective_session_id(session_id)
     history = fetch_history(effective_session_id)
     if raw:

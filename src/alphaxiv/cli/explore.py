@@ -19,7 +19,9 @@ from .helpers import console, make_client, run_async
 search = WrappedHelpGroup(
     "search",
     help=(
-        "Search public alphaXiv paper, topic, and organization endpoints.\n\n"
+        "Search public alphaXiv papers, topics, and organizations.\n\n"
+        "Use `search` when you already have keywords. Use `feed` when you want recent or "
+        "ranked papers from the homepage.\n\n"
         "Examples:\n"
         '  alphaxiv search all "attention is all you need"\n'
         '  alphaxiv search papers "graph neural networks"\n'
@@ -30,11 +32,13 @@ search = WrappedHelpGroup(
 feed = WrappedHelpGroup(
     "feed",
     help=(
-        "Inspect the public alphaXiv homepage feed, discover live filter values, "
-        "and list feed cards.\n\n"
+        "Explore the public alphaXiv homepage feed and its live filters.\n\n"
+        "Use `feed filters search` to discover topic slugs, then use `feed list` to rank "
+        "recent papers by hotness, likes, or GitHub stars.\n\n"
         "Examples:\n"
         "  alphaxiv feed filters\n"
         '  alphaxiv feed filters search "agentic"\n'
+        "  alphaxiv feed list --interval 90-days --topic agents --sort hot --limit 10\n"
         "  alphaxiv feed list --topic agentic-frameworks --organization Meta --limit 5\n"
         "  alphaxiv feed list --source github --sort most-stars --limit 5"
     ),
@@ -225,7 +229,7 @@ def _render_filter_search(results: FeedFilterSearchResults) -> None:
 @search.command("all")
 @click.argument("query")
 def search_all(query: str) -> None:
-    """Search papers, topic suggestions, and organizations in one request."""
+    """Search papers, topic suggestions, and organizations for one query."""
     results = fetch_homepage_search(query)
     _render_papers_table(query, results)
     if results.topics:
@@ -237,7 +241,7 @@ def search_all(query: str) -> None:
 @search.command("papers")
 @click.argument("query")
 def search_papers(query: str) -> None:
-    """Search only the public paper search endpoint used by the homepage."""
+    """Search papers by keyword and print matching alphaXiv paper ids."""
     results = fetch_paper_search(query)
     _render_paper_results_table(query, results)
 
@@ -245,7 +249,7 @@ def search_papers(query: str) -> None:
 @search.command("organizations")
 @click.argument("query")
 def search_organizations(query: str) -> None:
-    """Search only the public organization search endpoint."""
+    """Search organizations by name and print their slugs."""
     results = fetch_organization_search(query)
     _render_organizations_table(results, title=f"Organization Results for: {query}")
 
@@ -253,7 +257,7 @@ def search_organizations(query: str) -> None:
 @search.command("topics")
 @click.argument("query")
 def search_topics(query: str) -> None:
-    """Return the closest topic suggestions for a natural-language query."""
+    """Suggest feed topic slugs for a natural-language query."""
     results = fetch_topic_search(query)
     _render_topics_table(results)
 
@@ -267,6 +271,7 @@ def search_topics(query: str) -> None:
     ),
     default="hot",
     show_default=True,
+    help="Ranking mode: homepage hotness, likes, or source-specific popularity.",
 )
 @click.option("--organization", "organizations", multiple=True, help="Filter by organization name.")
 @click.option(
@@ -298,15 +303,17 @@ def search_topics(query: str) -> None:
     "--source",
     type=click.Choice(["github", "twitter"], case_sensitive=False),
     default=None,
-    help="Filter by feed source.",
+    help="Restrict results to cards that came from one source feed.",
 )
 @click.option(
     "--interval",
     type=click.Choice(["3-days", "7-days", "30-days", "90-days", "all-time"], case_sensitive=False),
     default=None,
-    help="Filter by publication-date interval.",
+    help="Restrict results to one publication date window.",
 )
-@click.option("--limit", type=int, default=10, show_default=True)
+@click.option(
+    "--limit", type=int, default=10, show_default=True, help="Maximum number of cards to print."
+)
 def list_feed(
     sort: str,
     organizations: tuple[str, ...],
@@ -319,7 +326,11 @@ def list_feed(
     interval: str | None,
     limit: int,
 ) -> None:
-    """List public homepage feed cards using alphaXiv-style filters."""
+    """List recent or ranked papers from the public alphaXiv homepage feed.
+
+    Use this after `feed filters search` when you know the topic slug you want. This is the
+    best surface for recent-paper discovery and rough importance ranking.
+    """
     cards = fetch_feed_cards(
         sort=sort,
         organizations=organizations,
@@ -367,7 +378,9 @@ def list_feed(
     cls=WrappedHelpGroup,
     invoke_without_command=True,
     help=(
-        "Show the current feed filter groups and search live topic/organization filter values.\n\n"
+        "Show the current feed filter groups and discover live filter values.\n\n"
+        "Use this before `feed list` when you do not know the exact topic slug or "
+        "organization name accepted by alphaXiv.\n\n"
         "Examples:\n"
         "  alphaxiv feed filters\n"
         '  alphaxiv feed filters search "agentic"'
@@ -375,7 +388,7 @@ def list_feed(
 )
 @click.pass_context
 def feed_filters(ctx: click.Context) -> None:
-    """Show the current feed sorts, filters, sources, and top organizations."""
+    """Show available feed sorts, date windows, sources, topics, and organizations."""
     if ctx.invoked_subcommand is None:
         _render_filter_options(fetch_filter_options())
 
@@ -383,7 +396,11 @@ def feed_filters(ctx: click.Context) -> None:
 @feed_filters.command("search")
 @click.argument("query")
 def search_feed_filters(query: str) -> None:
-    """Search live topic and organization filters like the website's filter drawer."""
+    """Search live topic and organization filters accepted by `feed list`.
+
+    Use this when you have natural-language topic words but do not know the exact alphaXiv
+    `--topic` or `--organization` values yet.
+    """
     _render_filter_search(fetch_feed_filter_search(query))
 
 

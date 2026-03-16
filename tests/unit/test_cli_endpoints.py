@@ -56,7 +56,7 @@ def test_top_level_help_shows_only_groups() -> None:
     assert "assistant" in result.output
     assert "folders" in result.output
     assert "\n  comments  " not in result.output
-    assert "status" not in result.output
+    assert "\n  status" not in result.output
     assert "clear   Clear the saved paper context" not in result.output
     assert "search-papers" not in result.output
     assert "pdf        " not in result.output
@@ -74,10 +74,10 @@ def test_group_help_wraps_without_ellipsis() -> None:
     assert assistant_help.exit_code == 0
     assert search_help.exit_code == 0
     assert comment_help.exit_code == 0
-    assert "recommendation endpoint." in paper_help.output
-    assert "session history, and related" in assistant_help.output
-    assert "closest topic suggestions for a natural-language" in search_help.output
-    assert "authenticated comment mutations" in comment_help.output
+    assert "readable text extracted from the paper PDF" in paper_help.output
+    assert "grounded in one paper" in assistant_help.output
+    assert "Use `feed` when you want recent" in search_help.output
+    assert "comment actions" in comment_help.output
 
 
 def test_removed_commands_fail_cleanly() -> None:
@@ -103,6 +103,26 @@ def test_removed_commands_fail_cleanly() -> None:
         result = runner.invoke(cli, command)
         assert result.exit_code != 0
         assert "No such command" in result.output
+
+
+def test_unknown_commands_show_replacement_suggestions() -> None:
+    runner = CliRunner()
+
+    removed_root = runner.invoke(cli, ["overview", "1706.03762"])
+    semantic_paper = runner.invoke(cli, ["paper", "full-text", "1706.03762"])
+    removed_assistant = runner.invoke(cli, ["assistant", "models"])
+
+    assert removed_root.exit_code != 0
+    assert "alphaxiv paper overview <paper-id>" in removed_root.output
+    assert "See: alphaxiv --help" in removed_root.output
+
+    assert semantic_paper.exit_code != 0
+    assert "alphaxiv paper text <paper-id>" in semantic_paper.output
+    assert "See: alphaxiv paper --help" in semantic_paper.output
+
+    assert removed_assistant.exit_code != 0
+    assert "alphaxiv assistant model" in removed_assistant.output
+    assert "See: alphaxiv assistant --help" in removed_assistant.output
 
 
 def test_search_all_shows_topics_and_organizations(monkeypatch) -> None:
@@ -527,6 +547,17 @@ def test_paper_pdf_commands(monkeypatch, tmp_path) -> None:
     assert output_path.name in download_result.output
 
 
+def test_paper_pdf_download_usage_error_shows_examples() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["paper", "pdf", "download"])
+
+    assert result.exit_code != 0
+    assert "Expected either <path> or <paper-id> <path>." in result.output
+    assert "alphaxiv paper pdf download ./paper.pdf" in result.output
+    assert "alphaxiv paper pdf download 1706.03762 ./paper.pdf" in result.output
+
+
 def test_assistant_url_metadata_command(monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
@@ -670,6 +701,46 @@ def test_paper_folders_list_command(monkeypatch) -> None:
     assert "yes" in result.output
 
 
+def test_paper_folders_list_resolution_error_shows_id_guidance(monkeypatch) -> None:
+    runner = CliRunner()
+
+    class _DummyPapers:
+        async def resolve(self, _identifier: str) -> ResolvedPaper:
+            return ResolvedPaper(
+                input_id="0189b531-a930-7613-9d2e-dd918c8435a5",
+                versionless_id=None,
+                canonical_id=None,
+                version_id="0189b531-a930-7613-9d2e-dd918c8435a5",
+                group_id=None,
+            )
+
+    class _DummyFolders:
+        async def list(self):
+            return []
+
+    class _DummyClient:
+        def __init__(self) -> None:
+            self.papers = _DummyPapers()
+            self.folders = _DummyFolders()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+            return None
+
+    monkeypatch.setattr(paper_cli, "make_client", lambda: _DummyClient())
+
+    result = runner.invoke(
+        cli, ["paper", "folders", "list", "0189b531-a930-7613-9d2e-dd918c8435a5"]
+    )
+
+    assert result.exit_code != 0
+    assert "requires a bare or versioned arXiv ID" in result.output
+    assert "alphaxiv paper folders list 1706.03762" in result.output
+    assert "alphaxiv paper show 1706.03762" in result.output
+
+
 def test_paper_folders_add_command(monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
@@ -692,6 +763,17 @@ def test_paper_folders_add_command(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Saved" in result.output
     assert "Reading List" in result.output
+
+
+def test_paper_folders_add_usage_error_shows_examples() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["paper", "folders", "add"])
+
+    assert result.exit_code != 0
+    assert "Expected either <folder> or <paper-id> <folder>." in result.output
+    assert 'alphaxiv paper folders add "Want to read"' in result.output
+    assert 'alphaxiv paper folders add 1706.03762 "Want to read"' in result.output
 
 
 def test_paper_folders_remove_command(monkeypatch) -> None:
@@ -719,3 +801,17 @@ def test_paper_folders_remove_command(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Removed" in result.output
     assert "Reading List" in result.output
+
+
+def test_comment_reply_usage_error_shows_examples() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        ["paper", "comments", "reply", "paper-id", "comment-id", "extra", "--body", "Thanks"],
+    )
+
+    assert result.exit_code != 0
+    assert "Expected either <comment-id> or <paper-id> <comment-id>." in result.output
+    assert 'alphaxiv paper comments reply comment-root --body "Thanks"' in result.output
+    assert 'alphaxiv paper comments reply 1706.03762 comment-root --body "Thanks"' in result.output

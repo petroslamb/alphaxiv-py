@@ -9,7 +9,7 @@ from alphaxiv._core import ClientCore
 from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.assistant import AssistantAPI
 from alphaxiv.cli.helpers import load_assistant_context, save_assistant_context
-from alphaxiv.exceptions import APIError
+from alphaxiv.exceptions import APIError, AuthRequiredError
 from alphaxiv.types import (
     AssistantContext,
     AssistantMessage,
@@ -160,6 +160,19 @@ def test_assistant_cli_history_uses_current_context(monkeypatch, tmp_path) -> No
     assert "Helios is a video model." in result.output
 
 
+def test_assistant_history_without_context_shows_guided_suggestions(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+
+    result = runner.invoke(cli, ["assistant", "history"])
+
+    assert result.exit_code != 0
+    assert "No current assistant chat is set." in result.output
+    assert "alphaxiv assistant list" in result.output
+    assert 'alphaxiv assistant start "<message>"' in result.output
+    assert "alphaxiv context use assistant <session-id>" in result.output
+
+
 def test_assistant_cli_history_raw(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
@@ -233,6 +246,24 @@ def test_assistant_model_cli_surfaces_click_exception(monkeypatch) -> None:
     assert "assistant model failed" in result.output
 
 
+def test_assistant_model_cli_auth_error_suggests_auth_setup(monkeypatch) -> None:
+    runner = CliRunner()
+
+    def _raise(awaitable):
+        awaitable.close()
+        raise AuthRequiredError("alphaXiv assistant endpoints require an API key.")
+
+    monkeypatch.setattr(assistant_cli, "run_async", _raise)
+
+    result = runner.invoke(cli, ["assistant", "model"])
+
+    assert result.exit_code != 0
+    assert "alphaXiv assistant endpoints require an API key." in result.output
+    assert "alphaxiv auth set-api-key" in result.output
+    assert "alphaxiv auth status" in result.output
+    assert "See: alphaxiv auth --help" in result.output
+
+
 def test_assistant_models_command_removed() -> None:
     runner = CliRunner()
 
@@ -240,3 +271,4 @@ def test_assistant_models_command_removed() -> None:
 
     assert result.exit_code != 0
     assert "No such command 'models'" in result.output
+    assert "alphaxiv assistant model" in result.output
