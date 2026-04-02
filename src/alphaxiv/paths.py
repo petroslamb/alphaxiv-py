@@ -31,6 +31,16 @@ def get_api_key_path() -> Path:
     return get_home_path() / "api-key.json"
 
 
+def get_browser_auth_path() -> Path:
+    """Return the saved browser-backed auth file path."""
+    return get_home_path() / "auth.json"
+
+
+def get_browser_profile_path() -> Path:
+    """Return the Playwright browser profile directory."""
+    return get_home_path() / "browser-profile"
+
+
 def ensure_home_path() -> Path:
     """Create and return the base config directory."""
     path = get_home_path()

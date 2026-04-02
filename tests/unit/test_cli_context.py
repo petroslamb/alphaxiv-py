@@ -6,16 +6,26 @@ from datetime import UTC, datetime
 from click.testing import CliRunner
 
 from alphaxiv.alphaxiv_cli import cli
-from alphaxiv.auth import SavedApiKey, build_saved_api_key, load_saved_api_key, save_api_key
+from alphaxiv.auth import (
+    SavedApiKey,
+    build_saved_api_key,
+    build_saved_browser_auth,
+    load_saved_api_key,
+    load_saved_browser_auth,
+    save_api_key,
+    save_browser_auth,
+)
 from alphaxiv.cli.helpers import (
     load_assistant_context,
     load_context,
+    make_assistant_client,
     save_assistant_context,
     save_context,
 )
 from alphaxiv.paths import (
     get_api_key_path,
     get_assistant_context_path,
+    get_browser_auth_path,
     get_context_path,
 )
 from alphaxiv.types import (
@@ -108,6 +118,43 @@ def test_auth_clear_command_removes_saved_api_key(monkeypatch, tmp_path) -> None
     assert not get_api_key_path().exists()
 
 
+def test_auth_login_web_command_saves_browser_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    saved_auth = build_saved_browser_auth(
+        "browser-session-token",
+        user={"name": "Petros", "email": "petros@example.com"},
+        created_at=datetime(2026, 3, 11, tzinfo=UTC),
+    )
+    monkeypatch.setattr(auth_cli, "authenticate_with_browser", lambda: saved_auth)
+
+    result = runner.invoke(cli, ["auth", "login-web"])
+
+    assert result.exit_code == 0
+    assert "Browser auth saved" in result.output
+    loaded = load_saved_browser_auth()
+    assert loaded is not None
+    assert loaded.email == "petros@example.com"
+
+
+def test_auth_clear_web_command_removes_saved_browser_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_browser_auth(
+        build_saved_browser_auth(
+            "browser-session-token",
+            user={"email": "petros@example.com"},
+            created_at=datetime(2026, 3, 11, tzinfo=UTC),
+        )
+    )
+
+    result = runner.invoke(cli, ["auth", "clear-web"])
+
+    assert result.exit_code == 0
+    assert "Removed saved alphaXiv web login" in result.output
+    assert not get_browser_auth_path().exists()
+
+
 def test_auth_status_shows_saved_api_key_without_model(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
@@ -129,6 +176,38 @@ def test_auth_status_shows_saved_api_key_without_model(monkeypatch, tmp_path) ->
     assert "axv1_test-token" not in status.output
     assert "axv1_test-to" in status.output
     assert "Preferred Model" not in status.output
+
+
+def test_auth_status_shows_saved_browser_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    monkeypatch.delenv("ALPHAXIV_API_KEY", raising=False)
+    save_browser_auth(
+        build_saved_browser_auth(
+            "browser-session-token",
+            user={"name": "Petros", "email": "petros@example.com"},
+            created_at=datetime(2026, 3, 11, tzinfo=UTC),
+        )
+    )
+
+    status = runner.invoke(cli, ["auth", "status"])
+
+    assert status.exit_code == 0
+    assert "alphaXiv Web Login" in status.output
+    assert "petros@example.com" in status.output
+    assert "browser-session-token" not in status.output
+    assert "browser-sess" in status.output
+    assert "Assistant commands prefer saved web login" in status.output
+
+
+def test_make_assistant_client_prefers_saved_browser_auth(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_browser_auth(build_saved_browser_auth("browser-session-token"))
+    monkeypatch.setattr("alphaxiv.cli.helpers.load_api_key_value", lambda: "axv1_saved-token")
+
+    client = make_assistant_client()
+
+    assert client._core.authorization == "Bearer browser-session-token"
 
 
 def test_context_use_paper_and_show(monkeypatch, tmp_path) -> None:

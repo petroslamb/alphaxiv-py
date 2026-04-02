@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0 - 2026-04-02
+
+- Restored optional browser-backed auth through `alphaxiv auth login-web`,
+  `alphaxiv auth clear-web`, and saved `auth.json` / browser-profile support.
+- Updated assistant commands to prefer the saved web login when it is
+  available, while keeping API-key auth for the rest of the authenticated CLI
+  surface.
+- Added SDK support for explicit bearer auth plus
+  `AlphaXivClient.from_saved_browser_auth()` and
+  `AlphaXivClient.from_saved_auth(prefer_browser=True)`.
+- Expanded unit, integration, and live smoke coverage for the restored browser
+  auth flow, including assistant write smoke that can seed browser-backed auth
+  from the operator's real alphaXiv session when available.
+- Restored the optional `browser` dependency extra for Playwright-backed auth
+  flows and documented the new assistant auth behavior in the CLI and Python
+  docs.
+
 ## 0.3.0 - 2026-03-17
 
 - Added NotebookLM-style agent UX improvements with built-in `guide`, `skill`,

@@ -21,8 +21,9 @@ from .types import (
 )
 
 ASSISTANT_AUTH_REQUIRED_MESSAGE = (
-    "alphaXiv assistant endpoints require an API key. Set ALPHAXIV_API_KEY, run "
-    "'alphaxiv auth set-api-key', or pass api_key into AlphaXivClient(...)."
+    "alphaXiv assistant endpoints require authentication. Set ALPHAXIV_API_KEY, run "
+    "'alphaxiv auth set-api-key' or 'alphaxiv auth login-web', or pass api_key/"
+    "authorization into AlphaXivClient(...)."
 )
 
 ASSISTANT_DEFAULT_MODEL = "claude-4.6-sonnet"

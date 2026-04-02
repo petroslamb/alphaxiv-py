@@ -34,7 +34,12 @@ from tests.fixtures import (
 )
 
 from alphaxiv import AlphaXivClient
-from alphaxiv.auth import build_saved_api_key, save_api_key
+from alphaxiv.auth import (
+    build_saved_api_key,
+    build_saved_browser_auth,
+    save_api_key,
+    save_browser_auth,
+)
 from alphaxiv.exceptions import APIError, AuthRequiredError, ResolutionError
 
 
@@ -68,6 +73,46 @@ async def test_from_saved_api_key_sends_authorization_header(
     )
 
     async with AlphaXivClient.from_saved_api_key() as client:
+        results = await client.search.papers("helios")
+
+    assert len(results) == 1
+    assert results[0].paper_id == "2603.04379"
+
+
+@pytest.mark.asyncio
+async def test_from_saved_browser_auth_sends_authorization_header(
+    httpx_mock, monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_browser_auth(build_saved_browser_auth("browser-session-token"))
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/search/v2/paper/fast?q=helios&includePrivate=false",
+        match_headers={"Authorization": "Bearer browser-session-token"},
+        json=SEARCH_PAYLOAD,
+    )
+
+    async with AlphaXivClient.from_saved_browser_auth() as client:
+        results = await client.search.papers("helios")
+
+    assert len(results) == 1
+    assert results[0].paper_id == "2603.04379"
+
+
+@pytest.mark.asyncio
+async def test_from_saved_auth_can_prefer_browser(httpx_mock, monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    monkeypatch.delenv("ALPHAXIV_API_KEY", raising=False)
+    save_api_key(build_saved_api_key("axv1_saved-token"))
+    save_browser_auth(build_saved_browser_auth("browser-session-token"))
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/search/v2/paper/fast?q=helios&includePrivate=false",
+        match_headers={"Authorization": "Bearer browser-session-token"},
+        json=SEARCH_PAYLOAD,
+    )
+
+    async with AlphaXivClient.from_saved_auth(prefer_browser=True) as client:
         results = await client.search.papers("helios")
 
     assert len(results) == 1

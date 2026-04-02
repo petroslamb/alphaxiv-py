@@ -23,7 +23,7 @@ from .helpers import (
     get_effective_session_id,
     load_assistant_context,
     load_context,
-    make_client,
+    make_assistant_client,
     print_json,
     run_async,
     save_assistant_context,
@@ -61,7 +61,7 @@ def _run_with_click_errors(awaitable):
 
 def fetch_sessions(paper_id: str | None = None, limit: int | None = None) -> list[AssistantSession]:
     async def _list() -> list[AssistantSession]:
-        async with make_client() as client:
+        async with make_assistant_client() as client:
             return await client.assistant.list(paper_id=paper_id, limit=limit)
 
     return _run_with_click_errors(_list())
@@ -69,7 +69,7 @@ def fetch_sessions(paper_id: str | None = None, limit: int | None = None) -> lis
 
 def fetch_history(session_id: str) -> list[AssistantMessage]:
     async def _history() -> list[AssistantMessage]:
-        async with make_client() as client:
+        async with make_assistant_client() as client:
             return await client.assistant.history(session_id)
 
     return _run_with_click_errors(_history())
@@ -77,7 +77,7 @@ def fetch_history(session_id: str) -> list[AssistantMessage]:
 
 def set_model_preference(model: str) -> str:
     async def _set() -> str:
-        async with make_client() as client:
+        async with make_assistant_client() as client:
             return await client.assistant.set_preferred_model(model)
 
     return _run_with_click_errors(_set())
@@ -85,7 +85,7 @@ def set_model_preference(model: str) -> str:
 
 def fetch_preferred_model() -> str:
     async def _get() -> str:
-        async with make_client() as client:
+        async with make_assistant_client() as client:
             return await client.assistant.preferred_model(refresh=True)
 
     return _run_with_click_errors(_get())
@@ -93,7 +93,7 @@ def fetch_preferred_model() -> str:
 
 def fetch_url_metadata(url: str) -> UrlMetadata:
     async def _get() -> UrlMetadata:
-        async with make_client() as client:
+        async with make_assistant_client() as client:
             return await client.assistant.url_metadata(url)
 
     return _run_with_click_errors(_get())
@@ -165,7 +165,7 @@ def run_assistant_chat(
             state["printed_newline_after_answer"] = True
 
     async def _run() -> AssistantRun:
-        async with make_client() as client:
+        async with make_assistant_client() as client:
             return await client.assistant.ask(
                 message,
                 session_id=session_id,

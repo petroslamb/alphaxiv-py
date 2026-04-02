@@ -10,7 +10,7 @@ from tests.e2e.helpers import (
     invoke_cli_with_retries,
     load_saved_assistant_context,
     require_live_assistant_write_smoke,
-    seed_saved_api_key,
+    seed_live_assistant_auth,
 )
 
 pytestmark = pytest.mark.e2e
@@ -20,8 +20,8 @@ def test_cli_assistant_start_history_and_reply_smoke(
     cli_runner,
     isolated_cli_env: dict[str, str],
 ) -> None:
-    api_key = require_live_assistant_write_smoke()
-    seed_saved_api_key(cli_runner, isolated_cli_env, api_key)
+    require_live_assistant_write_smoke()
+    seed_live_assistant_auth(cli_runner, isolated_cli_env)
 
     nonce = secrets.token_hex(4)
     prompt_prefix = f"alphaxiv-py-smoke-{nonce}"

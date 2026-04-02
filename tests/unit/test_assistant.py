@@ -251,14 +251,14 @@ def test_assistant_model_cli_auth_error_suggests_auth_setup(monkeypatch) -> None
 
     def _raise(awaitable):
         awaitable.close()
-        raise AuthRequiredError("alphaXiv assistant endpoints require an API key.")
+        raise AuthRequiredError("alphaXiv assistant endpoints require authentication.")
 
     monkeypatch.setattr(assistant_cli, "run_async", _raise)
 
     result = runner.invoke(cli, ["assistant", "model"])
 
     assert result.exit_code != 0
-    assert "alphaXiv assistant endpoints require an API key." in result.output
+    assert "alphaXiv assistant endpoints require authentication." in result.output
     assert "alphaxiv auth set-api-key" in result.output
     assert "alphaxiv auth status" in result.output
     assert "See: alphaxiv auth --help" in result.output

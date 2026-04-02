@@ -17,6 +17,16 @@ async with AlphaXivClient(api_key="axv1_...") as client:
 
 `AlphaXivClient.from_saved_api_key()` loads `ALPHAXIV_API_KEY` first and then falls back to the saved local API key from `alphaxiv auth set-api-key`.
 
+For assistant work, browser-backed auth is also available:
+
+```python
+async with AlphaXivClient.from_saved_browser_auth() as client:
+    run = await client.assistant.ask("Find papers on agent frameworks")
+```
+
+`AlphaXivClient.from_saved_auth(prefer_browser=True)` prefers the saved browser login from
+`alphaxiv auth login-web` and falls back to the saved API key.
+
 ## Search
 
 ```python
@@ -98,7 +108,7 @@ Authenticated paper mutations are also exposed:
 ## Assistant
 
 ```python
-async with AlphaXivClient.from_saved_api_key() as client:
+async with AlphaXivClient.from_saved_auth(prefer_browser=True) as client:
     sessions = await client.assistant.list()
     history = await client.assistant.history(sessions[0].id)
     preferred_model = await client.assistant.preferred_model()
@@ -114,7 +124,7 @@ async with AlphaXivClient.from_saved_api_key() as client:
 Paper-scoped assistant chats resolve the paper to a version UUID first:
 
 ```python
-async with AlphaXivClient.from_saved_api_key() as client:
+async with AlphaXivClient.from_saved_auth(prefer_browser=True) as client:
     run = await client.assistant.ask(
         "Explain the main contribution.",
         paper_id="1706.03762",

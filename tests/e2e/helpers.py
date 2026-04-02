@@ -4,6 +4,7 @@ import asyncio
 import os
 import time
 from collections.abc import Iterable
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,12 @@ from click.testing import CliRunner, Result
 
 from alphaxiv import AlphaXivClient
 from alphaxiv.alphaxiv_cli import cli
-from alphaxiv.auth import ALPHAXIV_API_KEY_ENV
+from alphaxiv.auth import (
+    ALPHAXIV_API_KEY_ENV,
+    ensure_saved_browser_auth,
+    load_saved_browser_auth,
+    save_browser_auth,
+)
 from alphaxiv.types import AssistantContext, Folder, PaperComment
 
 LIVE_SMOKE_ENV = "ALPHAXIV_RUN_E2E"
@@ -44,6 +50,21 @@ def build_cli_env(home: Path) -> dict[str, str]:
         "ALPHAXIV_HOME": str(home),
         ALPHAXIV_API_KEY_ENV: "",
     }
+
+
+@contextmanager
+def temporary_cli_env(env: dict[str, str]):
+    previous: dict[str, str | None] = {key: os.environ.get(key) for key in env}
+    try:
+        for key, value in env.items():
+            os.environ[key] = value
+        yield
+    finally:
+        for key, previous_value in previous.items():
+            if previous_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous_value
 
 
 def invoke_cli(
@@ -103,6 +124,34 @@ def seed_saved_api_key(runner: CliRunner, env: dict[str, str], api_key: str) -> 
     assert_cli_ok(result, "auth", "set-api-key", "--api-key", "<redacted>")
     assert "API key saved" in result.output
     return result
+
+
+def seed_saved_browser_auth(env: dict[str, str]) -> bool:
+    source_env = {
+        "ALPHAXIV_HOME": str(Path.home() / ".alphaxiv"),
+        ALPHAXIV_API_KEY_ENV: "",
+    }
+
+    with temporary_cli_env(source_env):
+        saved_auth = load_saved_browser_auth()
+        if saved_auth is None:
+            saved_auth = ensure_saved_browser_auth()
+        if saved_auth is None or saved_auth.is_expired:
+            return False
+
+    with temporary_cli_env(env):
+        save_browser_auth(saved_auth)
+    return True
+
+
+def seed_live_assistant_auth(runner: CliRunner, env: dict[str, str]) -> str:
+    if seed_saved_browser_auth(env):
+        return "browser"
+    api_key = os.getenv(ALPHAXIV_API_KEY_ENV)
+    if api_key:
+        seed_saved_api_key(runner, env, api_key)
+        return "api_key"
+    pytest.skip("Set up alphaXiv browser auth or ALPHAXIV_API_KEY for assistant write smoke.")
 
 
 def flatten_comments(comments: Iterable[PaperComment]) -> list[PaperComment]:

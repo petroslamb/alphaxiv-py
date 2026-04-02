@@ -11,7 +11,14 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from ..auth import SavedApiKey, fetch_current_user, load_api_key_value
+from ..auth import (
+    SavedApiKey,
+    SavedBrowserAuth,
+    ensure_saved_browser_auth,
+    fetch_current_user,
+    load_api_key_value,
+    load_saved_browser_auth,
+)
 from ..client import AlphaXivClient
 from ..exceptions import AlphaXivError
 from ..paths import ensure_home_path, get_assistant_context_path, get_context_path
@@ -46,6 +53,17 @@ def run_async_with_click_errors(
 def make_client() -> AlphaXivClient:
     """Create a client that reuses ALPHAXIV_API_KEY or a saved API key when available."""
     return AlphaXivClient(api_key=load_api_key_value())
+
+
+def make_assistant_client() -> AlphaXivClient:
+    """Create an assistant client that prefers saved browser auth and falls back to an API key."""
+    try:
+        saved_browser_auth = ensure_saved_browser_auth()
+    except Exception:
+        saved_browser_auth = load_saved_browser_auth()
+    if saved_browser_auth and not saved_browser_auth.is_expired:
+        return AlphaXivClient(authorization=saved_browser_auth.authorization_header)
+    return make_client()
 
 
 def load_context() -> ResolvedPaper | None:
@@ -182,6 +200,22 @@ def render_api_key_table(saved_api_key: SavedApiKey) -> Table:
         "Saved At",
         "env" if saved_api_key.source == "env" else saved_api_key.saved_at.isoformat(),
     )
+    return table
+
+
+def render_browser_auth_table(saved_auth: SavedBrowserAuth) -> Table:
+    table = Table(title="alphaXiv Web Login")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("Status", "expired" if saved_auth.is_expired else "configured")
+    table.add_row("Source", saved_auth.source.replace("_", " "))
+    table.add_row("Kind", saved_auth.kind.replace("_", " "))
+    table.add_row("Token Prefix", saved_auth.token_prefix)
+    table.add_row("User", saved_auth.display_name or "-")
+    table.add_row("Email", saved_auth.email or "-")
+    table.add_row("User ID", saved_auth.user_id or "-")
+    table.add_row("Created At", saved_auth.created_at.isoformat())
+    table.add_row("Expires At", saved_auth.expires_at.isoformat() if saved_auth.expires_at else "-")
     return table
 
 

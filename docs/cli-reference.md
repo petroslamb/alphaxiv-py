@@ -23,8 +23,10 @@ For automation and agent use:
 
 ```bash
 alphaxiv auth set-api-key --api-key "$ALPHAXIV_API_KEY"
+alphaxiv auth login-web
 alphaxiv auth status
 alphaxiv auth clear
+alphaxiv auth clear-web
 ```
 
 `auth set-api-key --api-key <key>` validates and saves an explicit alphaXiv API key to
@@ -33,9 +35,23 @@ alphaxiv auth clear
 `auth set-api-key` without `--api-key` prompts for the API key with hidden input before
 validating and saving it.
 
-`auth status` prints auth loaded from `ALPHAXIV_API_KEY` or `api-key.json`.
+`auth login-web` opens a persistent Chromium profile under `ALPHAXIV_HOME/browser-profile`,
+waits for you to complete the alphaXiv sign-in flow, and saves the resulting browser-backed auth
+to `auth.json`.
+
+Browser support is optional. Install it only if you need `auth login-web`:
+
+```bash
+uv sync --extra browser
+uv run playwright install chromium
+```
+
+`auth status` prints both the API-key state and the saved browser-backed auth state.
 
 `auth clear` removes the locally saved `api-key.json`.
+
+`auth clear-web` removes the locally saved `auth.json`. Add `--clear-browser-profile` if you also
+want to delete the persistent Playwright profile.
 
 ## Context
 
@@ -250,6 +266,9 @@ alphaxiv assistant history --json
 
 The assistant uses authenticated `assistant/v2` endpoints and streams responses over
 `text/event-stream`.
+
+Assistant commands prefer the saved web login from `alphaxiv auth login-web` when it is available,
+and otherwise fall back to API-key auth.
 
 `assistant list` defaults to homepage chats. Add `--paper <paper-id>` to list paper-scoped chats
 for a specific paper. Add `--json` for a normalized session list.

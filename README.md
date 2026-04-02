@@ -5,6 +5,7 @@
 This v1 release is intentionally public-first. It supports:
 
 - API-key auth via `ALPHAXIV_API_KEY` or a locally saved alphaXiv API key
+- optional browser-backed web login for assistant commands when API-key chat writes are restricted
 - authenticated assistant chat for homepage and paper-scoped sessions
 - homepage search suggestions for papers, topics, and organizations
 - homepage feed/card retrieval with sort and filter support
@@ -23,7 +24,7 @@ This v1 release is intentionally public-first. It supports:
 - authenticated paper votes plus comment create, reply, delete, and upvote mutations
 - CLI context around a current paper and assistant session
 
-Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv auth set-api-key`. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
+Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv auth set-api-key`. If your account's API key can read assistant metadata but cannot start or reply to chats, run `alphaxiv auth login-web`; assistant commands prefer the saved web login when it is available. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
 
 ## Installation
 
@@ -43,6 +44,13 @@ For local development:
 uv pip install -e .
 ```
 
+Optional browser support for `alphaxiv auth login-web`:
+
+```bash
+uv sync --extra browser
+uv run playwright install chromium
+```
+
 Recommended auth setup:
 
 ```bash
@@ -56,6 +64,12 @@ If you prefer to save the key locally:
 alphaxiv auth set-api-key --api-key "$ALPHAXIV_API_KEY"
 ```
 
+If assistant chat writes are restricted for your API key, save the alphaXiv web session too:
+
+```bash
+alphaxiv auth login-web
+```
+
 Users create API keys in the alphaXiv web app. This package does not create or manage API keys remotely.
 
 ## CLI Quick Start
@@ -67,6 +81,7 @@ The CLI is resource-first. The top-level surface is grouped into `auth`, `contex
 export ALPHAXIV_API_KEY="axv1_..."
 alphaxiv auth set-api-key --api-key "$ALPHAXIV_API_KEY"
 alphaxiv auth status
+alphaxiv auth login-web
 alphaxiv guide research
 alphaxiv context use paper 2603.04379
 alphaxiv context show
@@ -118,10 +133,12 @@ alphaxiv skill status --scope all --json
 alphaxiv agent show codex
 alphaxiv context clear
 alphaxiv auth clear
+alphaxiv auth clear-web
 ```
 
 `--json` is the stable machine-readable output mode for automation and agents.
 `--raw` stays available on selected commands when you want the backend-shaped payload for debugging.
+Assistant commands prefer the saved web login when it is available, and otherwise fall back to API-key auth.
 
 ## Python Quick Start
 
@@ -191,6 +208,8 @@ asyncio.run(main())
 ```
 
 `AlphaXivClient.from_saved_api_key()` loads `ALPHAXIV_API_KEY` first and then falls back to `~/.alphaxiv/api-key.json`.
+`AlphaXivClient.from_saved_browser_auth()` reuses the auth captured by `alphaxiv auth login-web`.
+`AlphaXivClient.from_saved_auth(prefer_browser=True)` prefers the saved web login and falls back to the saved API key.
 
 ## Agent Integrations
 
