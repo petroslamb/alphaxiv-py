@@ -144,6 +144,14 @@ How to interpret the outputs:
 - `assistant history` is the transcript view for the saved session.
 - `assistant list --paper` is the best way to inspect the saved chats that belong to one paper.
 
+Long-session note:
+
+- `assistant reply` keeps extending the same remote chat session.
+- Very long sessions can become slower to answer over time.
+- If latency starts climbing, start a fresh chat with `assistant start` and restate only the
+  context, recap, or paper ids you still need.
+- Keep the older thread available through `assistant history` or `assistant list`.
+
 Common mistakes:
 
 - Assuming `assistant start` automatically uses saved paper context. It does not; use `--paper <paper-id>` when you want paper grounding in a new chat.

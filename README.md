@@ -162,6 +162,13 @@ alphaxiv auth clear-web
 `--raw` stays available on selected commands when you want the backend-shaped payload for debugging.
 Assistant commands prefer the saved web login when it is available, and otherwise fall back to API-key auth.
 
+Long-running assistant chats can become slower over time because `assistant reply` keeps extending
+the same remote session. If a chat becomes sluggish and you do not need the whole thread active,
+start a fresh chat with `alphaxiv assistant start "..."` and carry forward only the minimal recap
+or paper ids you still need. Use `alphaxiv assistant history` or `alphaxiv assistant list` to keep
+the older session available for reference. This is the practical mitigation when the slowdown is
+coming from accumulated chat state.
+
 ## Python Quick Start
 
 ```python

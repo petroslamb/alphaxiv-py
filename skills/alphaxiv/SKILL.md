@@ -29,6 +29,9 @@ This skill is CLI-only. Do not switch to Python SDK guidance unless the user exp
 - `paper text`: readable text extracted from the PDF.
 - `paper pdf download`: the actual PDF file saved locally.
 - `assistant start` vs `assistant reply`: `start` opens a new assistant chat; `reply` continues the current or selected saved session.
+- Long-running assistant chats may get slower over time; if that happens, use `assistant start`
+  for a fresh session and carry forward only the minimal context you still need. This is the
+  available mitigation when the slowdown is coming from session growth.
 
 ## Auth rules
 
@@ -70,6 +73,11 @@ every assistant command.
 3. Use `context use paper <paper-id>` when several paper commands will target the same paper.
 4. Do not run mutating commands unless the user explicitly wants to change state.
 5. If a new assistant chat should be grounded in one paper, pass `--paper <paper-id>` to `assistant start`. A saved current paper does not automatically ground a new assistant chat.
+6. If a user reports a slow long-running assistant session, explain that `assistant reply` keeps
+   extending the same remote session. Suggest a fresh `assistant start` plus a short recap or the
+   relevant paper ids, while keeping the older session available through `assistant history` or
+   `assistant list`. Frame this as a mitigation for session-growth slowdown, not a guaranteed fix
+   for every latency issue.
 
 ## Reference map
 

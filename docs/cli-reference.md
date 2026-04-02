@@ -326,6 +326,12 @@ validation.
 `assistant history` accepts an optional session id. Without one, it uses the saved current
 assistant chat. Add `--json` for normalized message objects or `--raw` for backend payloads.
 
+`assistant reply` continues the same saved remote session. Very long chats can become slower to
+answer over time. If latency starts climbing and you no longer need the whole prior thread active,
+start a fresh session with `assistant start` and restate only the context you still need. Keep the
+older chat for reference with `assistant history` or `assistant list`. This is the mitigation the
+CLI can offer when the slowdown is coming from accumulated chat state.
+
 This assistant surface is distinct from the public `search` commands:
 
 - `search` calls public paper, topic, and organization search endpoints

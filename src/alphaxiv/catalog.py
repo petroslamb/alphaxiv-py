@@ -105,6 +105,13 @@ GUIDE_ENTRIES: dict[str, GuideEntry] = {
             "  - summarizing differences or reading order\n"
             "  - answering follow-up questions about one paper\n"
             "  - broad research synthesis after deterministic retrieval\n\n"
+            "Session note\n"
+            "  - `assistant reply` keeps appending to the same remote chat session.\n"
+            "  - Very long chats can become slower.\n"
+            '  - If that happens, start a fresh chat with `alphaxiv assistant start "<message>"`\n'
+            "    and bring forward only the context you still need.\n"
+            "  - Keep the older chat for reference with `assistant history` or `assistant list`.\n"
+            "  - This helps when the slowdown comes from accumulated chat state.\n\n"
             "Common mistakes\n"
             "  - Treating `assistant` as the first-step search surface.\n"
             "  - Assuming a saved paper context automatically grounds `assistant start`; it does not.\n"

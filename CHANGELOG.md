@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.2 - 2026-04-02
+
+- Documented that long-running assistant chat sessions can slow down over time
+  because `assistant reply` keeps extending the same remote session.
+- Added the current CLI mitigation: start a fresh chat with `assistant start`
+  and carry forward only the minimal recap or paper ids you still need, while
+  keeping the older session available through `assistant history` or
+  `assistant list`.
+- Updated the in-CLI assistant guide text and the shipped alphaXiv skill so
+  users and agents both surface the same long-session warning and mitigation.
+
 ## 0.4.1 - 2026-04-02
 
 - Clarified the browser-backed auth operating model in the README and CLI
