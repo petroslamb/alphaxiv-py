@@ -18,7 +18,7 @@ This skill is CLI-only. Do not switch to Python SDK guidance unless the user exp
 - `paper`: inspect one paper. This is where to get metadata, the original abstract, AI summary, long overview, extracted paper text, PDF access, similar papers, comments, and paper-specific folder membership.
 - `assistant`: authenticated synthesis after deterministic retrieval. Use this to explain, compare, or continue a research chat after `search`, `feed`, or `paper`.
 - `context`: save or inspect the current paper or assistant session so later commands can omit ids.
-- `auth`: set, inspect, or clear the alphaXiv API key used by authenticated commands.
+- `auth`: manage API-key auth and optional browser-backed web login for assistant commands.
 
 ## Highest-confusion distinctions
 
@@ -41,7 +41,6 @@ Public flows:
 
 API-key-authenticated flows:
 
-- all `assistant` commands
 - `folders`
 - `paper vote`
 - `paper view`
@@ -50,6 +49,19 @@ API-key-authenticated flows:
 - `paper comments reply`
 - `paper comments upvote`
 - `paper comments delete`
+
+Assistant-authenticated flows:
+
+- all `assistant` commands
+
+Assistant commands can authenticate through either:
+
+- `alphaxiv auth set-api-key`
+- `alphaxiv auth login-web`
+
+Prefer `auth login-web` when assistant chat writes are restricted for the API key. Treat
+`auth login-web` as one-time setup for a persistent browser profile, not something to rerun before
+every assistant command.
 
 ## Working rules
 

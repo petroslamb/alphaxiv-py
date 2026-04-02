@@ -10,10 +10,10 @@
 | `paper vote|view` | Record paper-level engagement | Yes | Yes | Yes |
 | `paper comments add|reply|upvote|delete` | Authenticated comment actions on a paper thread | Yes | `add` and `reply` can use saved paper context; `upvote` and `delete` need a comment id | Yes |
 | `paper folders list|add|remove` | Inspect or change which of your folders contain one paper | Yes | Yes | `list` no, `add` and `remove` yes |
-| `assistant list|history|model|set-model|start|reply|url-metadata` | Assistant chats, assistant settings, and link metadata | Yes | `reply` can use saved assistant context; `start` needs explicit `--paper` for paper grounding | `start`, `reply`, and `set-model` change remote state |
+| `assistant list|history|model|set-model|start|reply|url-metadata` | Assistant chats, assistant settings, and link metadata | Yes, via API key or saved web login | `reply` can use saved assistant context; `start` needs explicit `--paper` for paper grounding | `start`, `reply`, and `set-model` change remote state |
 | `folders list|show` | Inspect all authenticated folders and the papers inside them | Yes | No | No |
 | `context show|use|clear` | Manage the locally saved current paper and assistant session | No | n/a | Local state only |
-| `auth set-api-key|status|clear` | Manage the locally saved API key and validate it against alphaXiv | No saved key required | n/a | Local state; `set-api-key` also validates remotely |
+| `auth set-api-key|login-web|status|clear|clear-web` | Manage the locally saved API key and optional browser-backed auth | No saved key required | n/a | Local state; `set-api-key` and `login-web` also validate remotely |
 
 ## Nearby-command disambiguation
 

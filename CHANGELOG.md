@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.1 - 2026-04-02
+
+- Clarified the browser-backed auth operating model in the README and CLI
+  reference, including that `alphaxiv auth login-web` is one-time setup tied to
+  a persistent `ALPHAXIV_HOME` and browser profile.
+- Updated the shipped alphaXiv skill and reference files so assistant auth
+  guidance reflects the restored web-login path instead of describing assistant
+  commands as API-key-only.
+- Synced the lockfile package version to `0.4.1`.
+
 ## 0.4.0 - 2026-04-02
 
 - Restored optional browser-backed auth through `alphaxiv auth login-web`,

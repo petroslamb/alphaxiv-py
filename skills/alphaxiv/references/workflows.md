@@ -124,6 +124,10 @@ Goal:
 
 - Use the authenticated assistant for comparison, synthesis, and follow-up after you already have paper ids or a specific paper in mind.
 
+Auth setup note:
+
+- If assistant chat writes are restricted for the API key, run `alphaxiv auth login-web` once and keep `ALPHAXIV_HOME` and `browser-profile` stable. Do not rerun it before every assistant command.
+
 Recommended command order:
 
 ```bash
@@ -144,6 +148,7 @@ Common mistakes:
 
 - Assuming `assistant start` automatically uses saved paper context. It does not; use `--paper <paper-id>` when you want paper grounding in a new chat.
 - Using `assistant` as the first-step discovery mechanism when `search`, `feed`, or `paper` would be more deterministic.
+- Repeating `auth login-web` on every use instead of keeping the persistent browser profile.
 
 ## Work with folders and comments when authenticated
 

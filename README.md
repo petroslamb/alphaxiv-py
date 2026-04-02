@@ -51,6 +51,13 @@ uv sync --extra browser
 uv run playwright install chromium
 ```
 
+Or from PyPI:
+
+```bash
+pip install "alphaxiv-py[browser]"
+playwright install chromium
+```
+
 Recommended auth setup:
 
 ```bash
@@ -69,6 +76,21 @@ If assistant chat writes are restricted for your API key, save the alphaXiv web 
 ```bash
 alphaxiv auth login-web
 ```
+
+Use `auth login-web` as one-time setup for a persistent browser profile, not before every
+assistant command. After it succeeds, just use `alphaxiv assistant ...` normally and the CLI will
+try to refresh the saved web token automatically from `ALPHAXIV_HOME/browser-profile`.
+
+If someone keeps rerunning `auth login-web`, the usual problem is operational rather than
+token-lifetime alone:
+
+- `ALPHAXIV_HOME` changes between runs
+- the environment is ephemeral and does not keep `~/.alphaxiv`
+- `browser-profile` is being deleted or recreated
+- the underlying alphaXiv web session itself was signed out
+
+Tell users to keep `ALPHAXIV_HOME` stable, keep `browser-profile`, and rerun `auth login-web`
+only when the real web session is gone or they moved to a new machine or container.
 
 Users create API keys in the alphaXiv web app. This package does not create or manage API keys remotely.
 

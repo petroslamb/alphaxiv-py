@@ -46,6 +46,27 @@ uv sync --extra browser
 uv run playwright install chromium
 ```
 
+Or from PyPI:
+
+```bash
+pip install "alphaxiv-py[browser]"
+playwright install chromium
+```
+
+Treat `auth login-web` as one-time setup for a persistent browser profile. After it succeeds, use
+`alphaxiv assistant ...` normally; the CLI will try to refresh the saved web token automatically
+from `ALPHAXIV_HOME/browser-profile`.
+
+If a user keeps rerunning `auth login-web`, check these first:
+
+- `ALPHAXIV_HOME` changes between runs
+- the environment is ephemeral and does not preserve `~/.alphaxiv`
+- `browser-profile` is being deleted or recreated
+- the underlying alphaXiv web session was signed out
+
+In normal use, rerun `auth login-web` only when the real web session is gone or the user moved to
+a new machine or container.
+
 `auth status` prints both the API-key state and the saved browser-backed auth state.
 
 `auth clear` removes the locally saved `api-key.json`.
