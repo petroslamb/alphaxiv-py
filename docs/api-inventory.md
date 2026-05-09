@@ -40,6 +40,13 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/organizations/v2/search?q=...` | public | Organization search for labs, universities, and companies. | yes |
 | `GET` | `/organizations/v2/top` | public | Top organizations list used by homepage filtering UI. | yes |
 | `GET` | `/papers/v3/feed?...` | public | Homepage feed cards with sort and filter parameters. | yes |
+| `GET` | `/v1/search/paper?q=...` | public | Rich paper search payload with summaries, metrics, organizations, author info, canonical ids, topics, and repository metadata. | no |
+
+### Events
+
+| Method | Path | Access | Description | Used by alphaxiv-py |
+| --- | --- | --- | --- | --- |
+| `GET` | `/events/v1` | public | Public alphaXiv events list with title, speaker, organization, link, date, and optional recording. | no |
 
 ### Papers
 
@@ -112,12 +119,20 @@ These are the endpoint groups currently wired into the SDK and CLI:
 - Auth and preferences: `/users/v3`, `/users/v3/preferences`, `/folders/v3`, `/folders/v3/{folderId}/add-papers`, `/folders/v3/{folderId}/remove-papers`, `/comments/v2/{commentId}/upvote`, `/comments/v2/{commentId}`
 - Related hosts: `fetcher.alphaxiv.org` PDF URLs and `paper-podcasts.alphaxiv.org` transcript or podcast assets
 
+## Confirmed Public Endpoints Not Yet Implemented
+
+- `GET /events/v1`: accepted by `specs/features/events-and-rich-paper-search.md`
+  for future `client.events.list()` and `alphaxiv events list` support.
+- `GET /v1/search/paper?q=...`: accepted by
+  `specs/features/events-and-rich-paper-search.md` for future
+  `client.search.papers_rich(query)` and `alphaxiv search papers --rich`
+  support.
+
 ## Notes
 
 - The homepage feed is available through `/papers/v3/feed`, while `/organizations/v2/top` supplies filter UI defaults such as top organizations.
 - `PATCH /users/v3/preferences` appears broader than model selection alone; the web UI uses it for other assistant-pane preferences too.
 - `/papers/v3/{paperId}/similar-papers` returns noisy variants for some papers, including malformed or duplicate IDs. Any client support should canonicalize those results before surfacing them.
-<<<<<<< HEAD
 - `/papers/v3/{identifier}` is not wired into this repository yet. PET-13
   accepts it as the direct paper fallback route for alphaXiv direct identifiers
   after live probes returned public paper-version payloads for arXiv ID and
@@ -126,10 +141,7 @@ These are the endpoint groups currently wired into the SDK and CLI:
   version, canonical ID, authors, topics, metrics, and optional GitHub fields.
 - `/papers/v3/{paperGroupId}/figures` returns `{"figures": [...]}` and may
   return an empty list for papers without extracted figures.
-||||||| parent of df71b5e (docs(specs): accept paper AI sidecar specs)
-=======
 - `/papers/v3/{paperVersionId}/ai-detection` and `/papers/v3/{paperVersionId}/model-links` require alphaXiv UUIDv7 paper-version IDs directly; SDK and CLI support should resolve arXiv IDs before calling these sidecar routes.
->>>>>>> df71b5e (docs(specs): accept paper AI sidecar specs)
 - `POST /papers/v2/{paperVersionId}/comment` supports both top-level comments and replies. The web payload also contains annotation fields, but the current SDK/CLI intentionally expose only text fields in v1.
 - Multiple plausible comment edit routes were probed live and returned `404`; comment editing is not currently confirmed.
 - This inventory is based on live observation, not on official vendor documentation.

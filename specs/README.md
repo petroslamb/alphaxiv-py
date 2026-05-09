@@ -18,6 +18,7 @@ behavior.
 | [Auth, folders, and social actions](features/auth-folders-social-actions.md) | Implemented | Auth setup, current user, folders, votes, comments, and preferences |
 | [CLI guides and agent integrations](features/cli-guides-and-agent-integrations.md) | Implemented | Workflow guides, packaged skills, and Codex, Claude Code, and OpenCode integration installs |
 | [Paper preview, slug resolution, and figures](features/paper-preview-slug-resolution-and-figures.md) | Accepted | Public paper preview, alphaXiv direct resolution fallback, and paper figures |
+| [Events and rich paper search](features/events-and-rich-paper-search.md) | Accepted | Public events list and richer public paper search endpoints |
 | [Public read expansion](features/public-read-expansion.md) | Proposed | Future confirmed public read endpoints |
 | [Authenticated expansion backlog](features/authenticated-expansion-backlog.md) | Backlog | Future authenticated assistant usage, context-window, people, organization, and profile surfaces |
 
