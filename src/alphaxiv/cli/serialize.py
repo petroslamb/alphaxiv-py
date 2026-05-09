@@ -12,6 +12,7 @@ from ..types import (
     Author,
     Citation,
     CommentAuthor,
+    Event,
     ExploreFilterOptions,
     FeedCard,
     FeedFilterSearchResults,
@@ -33,6 +34,9 @@ from ..types import (
     PaperTranscript,
     PodcastTranscriptLine,
     ResolvedPaper,
+    RichPaperAuthor,
+    RichPaperOrganization,
+    RichPaperSearchResult,
     SearchResult,
     UrlMetadata,
 )
@@ -73,6 +77,63 @@ def serialize_search_result(result: SearchResult) -> dict[str, Any]:
         "title": result.title,
         "link": result.link,
         "snippet": result.snippet,
+    }
+
+
+def serialize_event(event: Event) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "title": event.title,
+        "speaker": event.speaker,
+        "organization": event.organization,
+        "link": event.link,
+        "date": event.date,
+        "recording": event.recording,
+    }
+
+
+def serialize_rich_paper_organization(
+    organization: RichPaperOrganization,
+) -> dict[str, Any]:
+    return {
+        "name": organization.name,
+        "image": organization.image,
+    }
+
+
+def serialize_rich_paper_author(author: RichPaperAuthor) -> dict[str, Any]:
+    return {
+        "id": author.id,
+        "username": author.username,
+        "real_name": author.real_name,
+        "full_name": author.full_name,
+        "display_name": author.display_name,
+        "avatar_url": author.avatar_url,
+        "institution": author.institution,
+    }
+
+
+def serialize_rich_paper_search_result(result: RichPaperSearchResult) -> dict[str, Any]:
+    return {
+        "id": result.id,
+        "paper_group_id": result.paper_group_id,
+        "title": result.title,
+        "abstract": result.abstract,
+        "summary": result.summary,
+        "paper_summary": result.paper_summary,
+        "image_url": result.image_url,
+        "universal_paper_id": result.universal_paper_id,
+        "canonical_id": result.canonical_id,
+        "version_id": result.version_id,
+        "publication_date": result.publication_date,
+        "first_publication_date": result.first_publication_date,
+        "updated_at": result.updated_at,
+        "topics": list(result.topics),
+        "github_url": result.github_url,
+        "github_stars": result.github_stars,
+        "metrics": result.metrics,
+        "organizations": [serialize_rich_paper_organization(item) for item in result.organizations],
+        "authors": [serialize_rich_paper_author(item) for item in result.authors],
     }
 
 

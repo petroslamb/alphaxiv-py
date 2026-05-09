@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ._comments import CommentsAPI
 from ._core import DEFAULT_TIMEOUT, ClientCore
+from ._events import EventsAPI
 from ._explore import ExploreAPI
 from ._folders import FoldersAPI
 from ._papers import PapersAPI
@@ -25,6 +26,7 @@ class AlphaXivClient:
             raise ValueError("Pass either api_key or authorization, not both.")
         resolved_authorization = authorization or (f"Bearer {api_key}" if api_key else None)
         self._core = ClientCore(authorization=resolved_authorization, timeout=timeout)
+        self.events = EventsAPI(self._core)
         self.search = SearchAPI(self._core)
         self.explore = ExploreAPI(self._core)
         self.papers = PapersAPI(self._core)

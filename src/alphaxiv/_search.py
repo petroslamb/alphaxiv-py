@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from ._core import BASE_API_URL, ClientCore
-from .types import HomepageSearchResults, OrganizationResult, SearchResult
+from .types import HomepageSearchResults, OrganizationResult, RichPaperSearchResult, SearchResult
 
 
 class SearchAPI:
@@ -22,6 +22,19 @@ class SearchAPI:
         if not isinstance(payload, list):
             return []
         return [SearchResult.from_payload(item) for item in payload if isinstance(item, dict)]
+
+    async def papers_rich(self, query: str) -> list[RichPaperSearchResult]:
+        if not query.strip():
+            raise ValueError("query must not be empty")
+        payload = await self._core.get_json(
+            f"{BASE_API_URL}/v1/search/paper",
+            params={"q": query},
+        )
+        if not isinstance(payload, list):
+            return []
+        return [
+            RichPaperSearchResult.from_payload(item) for item in payload if isinstance(item, dict)
+        ]
 
     async def organizations(self, query: str) -> list[OrganizationResult]:
         payload = await self._core.get_json(

@@ -6,9 +6,9 @@ Status: Accepted
 
 Owner issue: PET-15
 
-This spec accepts two confirmed public read surfaces for future implementation:
-public alphaXiv events and rich paper search. PET-15 is spec-only and does not
-change SDK or CLI behavior.
+This spec accepts and now records the implemented public read surfaces for
+public alphaXiv events and rich paper search. PET-15 was spec-only; PET-17
+implements the accepted SDK and CLI behavior.
 
 ## SDK Surface
 
@@ -187,10 +187,13 @@ Unknown paper fields must be preserved in `raw`.
 - PET-15 makes no SDK or CLI implementation changes.
 - Phase 3 implementation must not add behavior beyond this accepted spec
   without updating this spec first.
+- PET-17 implements the accepted SDK and CLI behavior.
 
 ## Validation Commands
 
 ```bash
 uv run python scripts/check_specs.py
+uv run pytest tests/integration/test_client.py::test_events_list tests/integration/test_client.py::test_search_papers_rich tests/unit/test_cli_endpoints.py::test_events_list_command tests/unit/test_cli_endpoints.py::test_search_papers_rich_command -q
 uv run pytest
+ALPHAXIV_RUN_E2E=1 uv run pytest tests/e2e -q
 ```

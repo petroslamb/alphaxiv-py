@@ -16,6 +16,7 @@ from tests.fixtures import (
     COMMENT_REPLY_RESPONSE,
     COMMENT_UPVOTE_RESPONSE,
     COMMENTS_PAYLOAD,
+    EVENTS_PAYLOAD,
     EXPLORE_FEED_PAYLOAD,
     FOLDERS_PAYLOAD,
     FULL_TEXT_PAYLOAD,
@@ -26,6 +27,7 @@ from tests.fixtures import (
     OVERVIEW_STATUS_PAYLOAD,
     PAPER_VIEW_RESPONSE,
     PAPER_VOTE_RESPONSE,
+    RICH_PAPER_SEARCH_PAYLOAD,
     SEARCH_PAYLOAD,
     SIMILAR_PAPERS_PAYLOAD,
     TOPIC_SEARCH_PAYLOAD,
@@ -56,6 +58,54 @@ async def test_search_papers(httpx_mock) -> None:
 
     assert len(results) == 1
     assert results[0].paper_id == "2603.04379"
+
+
+@pytest.mark.asyncio
+async def test_search_papers_rich(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/v1/search/paper?q=attention",
+        json=RICH_PAPER_SEARCH_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        results = await client.search.papers_rich("attention")
+
+    assert len(results) == 1
+    assert results[0].title == "Attention Is All You Need"
+    assert results[0].summary == "The Transformer replaces recurrence with attention."
+    assert results[0].universal_paper_id == "1706.03762"
+    assert results[0].organizations[0].name == "Google"
+    assert [author.display_name for author in results[0].authors] == [
+        "Ashish Vaswani",
+        "Noam Shazeer",
+        "Niki Parmar",
+    ]
+    assert results[0].raw["extra"] == "preserved"
+
+
+@pytest.mark.asyncio
+async def test_search_papers_rich_rejects_empty_query(httpx_mock) -> None:
+    async with AlphaXivClient() as client:
+        with pytest.raises(ValueError, match="query must not be empty"):
+            await client.search.papers_rich("   ")
+
+
+@pytest.mark.asyncio
+async def test_events_list(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/events/v1",
+        json=EVENTS_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        events = await client.events.list()
+
+    assert len(events) == 1
+    assert events[0].title == "Measuring and Improving Long-Horizon Reasoning Capabilities"
+    assert events[0].recording is None
+    assert events[0].raw["extra"] == "preserved"
 
 
 @pytest.mark.asyncio

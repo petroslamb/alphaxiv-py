@@ -3,6 +3,7 @@
 from .agent import agent
 from .assistant import assistant
 from .auth import auth
+from .events import events
 from .explore import feed, search
 from .folders import folders
 from .guide import guide
@@ -15,6 +16,7 @@ __all__ = [
     "assistant",
     "auth",
     "context",
+    "events",
     "feed",
     "folders",
     "guide",

@@ -53,6 +53,162 @@ class SearchResult:
 
 
 @dataclass(slots=True)
+class Event:
+    id: str
+    title: str
+    speaker: str | None
+    organization: str | None
+    link: str | None
+    date: str | None
+    recording: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Event:
+        return cls(
+            id=payload.get("id", ""),
+            title=payload.get("title", ""),
+            speaker=payload.get("speaker"),
+            organization=payload.get("organization"),
+            link=payload.get("link"),
+            date=payload.get("date"),
+            recording=payload.get("recording"),
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class RichPaperOrganization:
+    name: str
+    image: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> RichPaperOrganization:
+        return cls(
+            name=payload.get("name", ""),
+            image=payload.get("image"),
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class RichPaperAuthor:
+    id: str | None
+    username: str | None
+    real_name: str | None
+    full_name: str | None
+    avatar_url: str | None
+    institution: str | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @property
+    def display_name(self) -> str:
+        return self.full_name or self.real_name or self.username or self.id or "Unknown"
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> RichPaperAuthor:
+        return cls(
+            id=payload.get("id"),
+            username=payload.get("username"),
+            real_name=payload.get("realName") or payload.get("real_name"),
+            full_name=payload.get("full_name") or payload.get("name"),
+            avatar_url=payload.get("avatar")
+            or payload.get("avatarUrl")
+            or payload.get("avatar_url"),
+            institution=payload.get("institution"),
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class RichPaperSearchResult:
+    id: str
+    paper_group_id: str | None
+    title: str
+    abstract: str
+    summary: str | None
+    paper_summary: dict[str, Any] | None
+    image_url: str | None
+    universal_paper_id: str | None
+    canonical_id: str | None
+    version_id: str | None
+    publication_date: str | None
+    first_publication_date: str | None
+    updated_at: str | None
+    topics: list[str]
+    github_url: str | None
+    github_stars: int | None
+    metrics: dict[str, Any]
+    organizations: list[RichPaperOrganization]
+    authors: list[RichPaperAuthor]
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> RichPaperSearchResult:
+        paper_summary = payload.get("paper_summary")
+        summary_payload = paper_summary if isinstance(paper_summary, dict) else None
+        organizations = [
+            RichPaperOrganization.from_payload(item)
+            for item in payload.get("organization_info") or []
+            if isinstance(item, dict)
+        ]
+        authors = _parse_rich_paper_authors(payload)
+        metrics = payload.get("metrics")
+        return cls(
+            id=payload.get("id", ""),
+            paper_group_id=payload.get("paper_group_id"),
+            title=payload.get("title", ""),
+            abstract=payload.get("abstract", ""),
+            summary=summary_payload.get("summary") if summary_payload else None,
+            paper_summary=summary_payload,
+            image_url=payload.get("image_url"),
+            universal_paper_id=payload.get("universal_paper_id"),
+            canonical_id=payload.get("canonical_id"),
+            version_id=payload.get("version_id"),
+            publication_date=payload.get("publication_date"),
+            first_publication_date=payload.get("first_publication_date"),
+            updated_at=payload.get("updated_at"),
+            topics=list(payload.get("topics") or []),
+            github_url=payload.get("github_url"),
+            github_stars=payload.get("github_stars")
+            if isinstance(payload.get("github_stars"), int)
+            else None,
+            metrics=metrics if isinstance(metrics, dict) else {},
+            organizations=organizations,
+            authors=authors,
+            raw=payload,
+        )
+
+
+def _parse_rich_paper_authors(payload: dict[str, Any]) -> list[RichPaperAuthor]:
+    authors: list[RichPaperAuthor] = []
+    seen: set[str] = set()
+    for field_name in ("author_info", "authors", "full_authors"):
+        for item in payload.get(field_name) or []:
+            if isinstance(item, dict):
+                author = RichPaperAuthor.from_payload(item)
+            elif isinstance(item, str):
+                author = RichPaperAuthor(
+                    id=None,
+                    username=None,
+                    real_name=None,
+                    full_name=item,
+                    avatar_url=None,
+                    institution=None,
+                    raw={"name": item},
+                )
+            else:
+                continue
+            key = author.id or author.username or author.display_name
+            if key in seen:
+                continue
+            seen.add(key)
+            authors.append(author)
+    return authors
+
+
+@dataclass(slots=True)
 class OrganizationResult:
     id: str
     name: str

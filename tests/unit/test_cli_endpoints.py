@@ -10,6 +10,7 @@ from click.testing import CliRunner
 from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.types import (
     CommentAuthor,
+    Event,
     ExploreFilterOptions,
     FeedCard,
     FeedFilterSearchResults,
@@ -19,6 +20,9 @@ from alphaxiv.types import (
     OrganizationResult,
     PaperComment,
     ResolvedPaper,
+    RichPaperAuthor,
+    RichPaperOrganization,
+    RichPaperSearchResult,
     SearchResult,
     UrlMetadata,
 )
@@ -26,6 +30,7 @@ from alphaxiv.types import (
 assistant_cli = importlib.import_module("alphaxiv.cli.assistant")
 context_cli = importlib.import_module("alphaxiv.cli.session")
 explore_cli = importlib.import_module("alphaxiv.cli.explore")
+events_cli = importlib.import_module("alphaxiv.cli.events")
 folders_cli = importlib.import_module("alphaxiv.cli.folders")
 paper_cli = importlib.import_module("alphaxiv.cli.paper")
 
@@ -51,6 +56,7 @@ def test_top_level_help_shows_only_groups() -> None:
     assert "auth" in result.output
     assert "context" in result.output
     assert "search" in result.output
+    assert "events" in result.output
     assert "feed" in result.output
     assert "paper" in result.output
     assert "assistant" in result.output
@@ -168,6 +174,76 @@ def test_search_papers_command(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Paper Search Results for: helios" in result.output
     assert "2603.04379" in result.output
+
+
+def test_search_papers_rich_command(monkeypatch) -> None:
+    runner = CliRunner()
+    results = [
+        RichPaperSearchResult(
+            id="015c9ef4-ac30-768d-928b-847320902575",
+            paper_group_id="015c9ef4-ac30-768d-928b-847320902575",
+            title="Attention Is All You Need",
+            abstract="The dominant sequence transduction models...",
+            summary="The Transformer replaces recurrence with attention.",
+            paper_summary={"summary": "The Transformer replaces recurrence with attention."},
+            image_url=None,
+            universal_paper_id="1706.03762",
+            canonical_id="1706.03762v7",
+            version_id="0189b531-a930-7613-9d2e-dd918c8435a5",
+            publication_date="2017-06-12T00:00:00.000Z",
+            first_publication_date="2017-06-12T00:00:00.000Z",
+            updated_at="2026-05-09T00:00:00.000Z",
+            topics=["machine-learning", "attention"],
+            github_url="https://github.com/tensorflow/tensor2tensor",
+            github_stars=1000,
+            metrics={},
+            organizations=[RichPaperOrganization(name="Google", image=None, raw={})],
+            authors=[
+                RichPaperAuthor(
+                    id="author-vaswani",
+                    username="avaswani",
+                    real_name="Ashish Vaswani",
+                    full_name=None,
+                    avatar_url=None,
+                    institution="Google",
+                    raw={},
+                )
+            ],
+            raw={},
+        )
+    ]
+    monkeypatch.setattr(explore_cli, "fetch_rich_paper_search", lambda _query: results)
+
+    result = runner.invoke(cli, ["search", "papers", "--rich", "attention"])
+    assert result.exit_code == 0
+    assert "Rich Paper Search Results for: attention" in result.output
+    assert "1706.03762" in result.output
+    assert "Ashish Vaswani" in result.output
+
+
+def test_events_list_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        events_cli,
+        "fetch_events",
+        lambda: [
+            Event(
+                id="event-long-horizon",
+                title="Reasoning Talk",
+                speaker="Research Speaker",
+                organization="alphaXiv",
+                link="https://lu.ma/example",
+                date="2026-05-15T18:00:00.000Z",
+                recording=None,
+                raw={},
+            )
+        ],
+    )
+
+    result = runner.invoke(cli, ["events", "list", "--json"])
+    assert result.exit_code == 0
+    assert "Reasoning Talk" in result.output
+    assert "Research Speaker" in result.output
 
 
 def test_search_organizations_command(monkeypatch) -> None:
