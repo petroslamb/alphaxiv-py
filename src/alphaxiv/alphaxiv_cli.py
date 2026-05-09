@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 
 from . import __version__
-from .cli import agent, assistant, auth, context, feed, folders, guide, paper, search, skill
+from .cli import agent, assistant, auth, context, events, feed, folders, guide, paper, search, skill
 from .cli.grouped import WrappedHelpGroup
 
 
@@ -24,6 +24,7 @@ def cli() -> None:
 cli.add_command(auth)
 cli.add_command(context)
 cli.add_command(search)
+cli.add_command(events)
 cli.add_command(feed)
 cli.add_command(paper)
 cli.add_command(assistant)

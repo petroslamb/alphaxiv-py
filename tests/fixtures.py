@@ -11,6 +11,63 @@ SEARCH_PAYLOAD = [
     }
 ]
 
+EVENTS_PAYLOAD = [
+    {
+        "id": "event-long-horizon",
+        "title": "Measuring and Improving Long-Horizon Reasoning Capabilities",
+        "speaker": "Research Speaker",
+        "organization": "alphaXiv",
+        "link": "https://lu.ma/example",
+        "date": "2026-05-15T18:00:00.000Z",
+        "recording": None,
+        "extra": "preserved",
+    }
+]
+
+RICH_PAPER_SEARCH_PAYLOAD = [
+    {
+        "id": "015c9ef4-ac30-768d-928b-847320902575",
+        "paper_group_id": "015c9ef4-ac30-768d-928b-847320902575",
+        "title": "Attention Is All You Need",
+        "abstract": "The dominant sequence transduction models are based on complex recurrent...",
+        "paper_summary": {
+            "summary": "The Transformer replaces recurrence with attention.",
+            "originalProblem": ["Sequence transduction was slow."],
+            "solution": ["Use self-attention."],
+            "keyInsights": ["Attention can model long-range dependencies."],
+            "results": ["State-of-the-art translation quality."],
+        },
+        "image_url": "image/1706.03762v7.png",
+        "universal_paper_id": "1706.03762",
+        "metrics": {
+            "visits_count": {"all": 12345, "last_7_days": 789},
+            "total_votes": 500,
+            "public_total_votes": 700,
+        },
+        "first_publication_date": "2017-06-12T00:00:00.000Z",
+        "publication_date": "2017-06-12T00:00:00.000Z",
+        "updated_at": "2026-05-09T00:00:00.000Z",
+        "topics": ["machine-learning", "attention"],
+        "github_stars": 1000,
+        "github_url": "https://github.com/tensorflow/tensor2tensor",
+        "organization_info": [{"name": "Google", "image": "images/google.png"}],
+        "author_info": [
+            {
+                "id": "author-vaswani",
+                "username": "avaswani",
+                "realName": "Ashish Vaswani",
+                "avatar": "https://example.com/avatar.png",
+                "institution": "Google",
+            }
+        ],
+        "authors": ["Noam Shazeer"],
+        "full_authors": [{"full_name": "Niki Parmar"}],
+        "canonical_id": "1706.03762v7",
+        "version_id": "0189b531-a930-7613-9d2e-dd918c8435a5",
+        "extra": "preserved",
+    }
+]
+
 ORGANIZATION_SEARCH_PAYLOAD = [
     {
         "id": "org-mit",

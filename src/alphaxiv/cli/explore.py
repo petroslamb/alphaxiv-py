@@ -11,6 +11,7 @@ from ..types import (
     FeedFilterSearchResults,
     HomepageSearchResults,
     OrganizationResult,
+    RichPaperSearchResult,
     SearchResult,
 )
 from .grouped import WrappedHelpGroup
@@ -21,6 +22,7 @@ from .serialize import (
     serialize_filter_options,
     serialize_homepage_search,
     serialize_organization_result,
+    serialize_rich_paper_search_result,
     serialize_search_result,
 )
 
@@ -65,6 +67,14 @@ def fetch_paper_search(query: str) -> list[SearchResult]:
     async def _search() -> list[SearchResult]:
         async with make_client() as client:
             return await client.search.papers(query)
+
+    return run_async(_search())
+
+
+def fetch_rich_paper_search(query: str) -> list[RichPaperSearchResult]:
+    async def _search() -> list[RichPaperSearchResult]:
+        async with make_client() as client:
+            return await client.search.papers_rich(query)
 
     return run_async(_search())
 
@@ -149,6 +159,22 @@ def _render_paper_results_table(query: str, results: list[SearchResult]) -> None
     table.add_column("Link")
     for result in results:
         table.add_row(result.paper_id, result.title, f"https://www.alphaxiv.org{result.link}")
+    console.print(table)
+
+
+def _render_rich_paper_results_table(query: str, results: list[RichPaperSearchResult]) -> None:
+    table = Table(title=f"Rich Paper Search Results for: {query}")
+    table.add_column("Paper ID")
+    table.add_column("Title")
+    table.add_column("Authors")
+    table.add_column("GitHub")
+    table.add_column("Topics")
+    for result in results:
+        paper_id = result.universal_paper_id or result.canonical_id or result.id
+        authors = ", ".join(author.display_name for author in result.authors[:3]) or "-"
+        github = str(result.github_stars) if result.github_stars is not None else "-"
+        topics = ", ".join(result.topics[:3]) or "-"
+        table.add_row(paper_id, result.title, authors, github, topics)
     console.print(table)
 
 
@@ -252,9 +278,25 @@ def search_all(query: str, json_output: bool) -> None:
 
 @search.command("papers")
 @click.argument("query")
+@click.option("--rich", is_flag=True, help="Use the rich public paper search endpoint.")
 @click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
-def search_papers(query: str, json_output: bool) -> None:
+def search_papers(query: str, rich: bool, json_output: bool) -> None:
     """Search papers by keyword and print matching alphaXiv paper ids."""
+    if rich:
+        rich_results = fetch_rich_paper_search(query)
+        if json_output:
+            print_json(
+                {
+                    "query": query,
+                    "papers": [
+                        serialize_rich_paper_search_result(result) for result in rich_results
+                    ],
+                }
+            )
+            return
+        _render_rich_paper_results_table(query, rich_results)
+        return
+
     results = fetch_paper_search(query)
     if json_output:
         print_json(
