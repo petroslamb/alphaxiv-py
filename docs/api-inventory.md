@@ -1,6 +1,6 @@
 # API Inventory
 
-Last verified: March 12, 2026
+Last verified: May 9, 2026
 
 This is a confirmed inventory of alphaXiv endpoints observed from live traffic and direct probing. It is not an official contract, and alphaXiv does not appear to publish public API docs or an OpenAPI schema.
 
@@ -48,6 +48,9 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/papers/v3/legacy/{canonical_or_versioned_id}` | public | Main paper metadata payload for canonical or versioned arXiv IDs. | yes |
 | `GET` | `/papers/v3/legacy/{bare_id}` | public | Direct legacy lookup by bare arXiv ID. | yes |
 | `GET` | `/papers/v3/legacy/{paperGroupId}/comments` | public | Public paper comments thread. | yes |
+| `GET` | `/papers/v3/{identifier}` | public | Direct paper-version payload for public arXiv IDs and paper-version UUIDs; accepted as the fallback route for alphaXiv direct identifiers. | no |
+| `GET` | `/papers/v3/{identifier}/preview` | public | Compact public paper preview metadata. | no |
+| `GET` | `/papers/v3/{paperGroupId}/figures` | public | Figure asset paths for a paper group. | no |
 | `POST` | `/papers/v2/{paperVersionId}/comment` | auth write | Creates a top-level paper comment or a reply when `parentCommentId` is set. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/full-text` | public | Page-level extracted paper text. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/{lang}` | public | AI overview or blog payload for a paper version. | yes |
@@ -112,6 +115,14 @@ These are the endpoint groups currently wired into the SDK and CLI:
 - The homepage feed is available through `/papers/v3/feed`, while `/organizations/v2/top` supplies filter UI defaults such as top organizations.
 - `PATCH /users/v3/preferences` appears broader than model selection alone; the web UI uses it for other assistant-pane preferences too.
 - `/papers/v3/{paperId}/similar-papers` returns noisy variants for some papers, including malformed or duplicate IDs. Any client support should canonicalize those results before surfacing them.
+- `/papers/v3/{identifier}` is not wired into this repository yet. PET-13
+  accepts it as the direct paper fallback route for alphaXiv direct identifiers
+  after live probes returned public paper-version payloads for arXiv ID and
+  paper-version UUID inputs.
+- `/papers/v3/{identifier}/preview` returns compact paper metadata with group,
+  version, canonical ID, authors, topics, metrics, and optional GitHub fields.
+- `/papers/v3/{paperGroupId}/figures` returns `{"figures": [...]}` and may
+  return an empty list for papers without extracted figures.
 - `POST /papers/v2/{paperVersionId}/comment` supports both top-level comments and replies. The web payload also contains annotation fields, but the current SDK/CLI intentionally expose only text fields in v1.
 - Multiple plausible comment edit routes were probed live and returned `404`; comment editing is not currently confirmed.
 - This inventory is based on live observation, not on official vendor documentation.
