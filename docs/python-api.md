@@ -39,9 +39,14 @@ Individual public search endpoints:
 ```python
 async with AlphaXivClient() as client:
     papers = await client.search.papers("reinforcement learning")
+    rich_papers = await client.search.papers_rich("reinforcement learning")
     organizations = await client.search.organizations("reinforcement learning")
     topics = await client.search.closest_topics("reinforcement learning")
 ```
+
+`client.search.papers_rich(query)` calls the public rich paper search endpoint and returns
+`RichPaperSearchResult` objects with summaries, metrics, organizations, author/profile metadata,
+canonical ids, topics, repository metadata, and the preserved raw payload.
 
 Homepage-style search suggestions:
 
@@ -67,16 +72,30 @@ async with AlphaXivClient() as client:
     )
 ```
 
+## Events
+
+```python
+async with AlphaXivClient() as client:
+    events = await client.events.list()
+```
+
+`client.events.list()` is a public unauthenticated read call returning typed `Event` objects with
+title, speaker, organization, link, date, optional recording, and raw payload retention.
+
 ## Papers
 
 ```python
 async with AlphaXivClient() as client:
     resolved = await client.papers.resolve("1706.03762")
     paper = await client.papers.get("1706.03762")
+    preview = await client.papers.preview("1706.03762")
+    figures = await client.papers.figures("1706.03762")
     comments = await client.papers.comments("1706.03762")
     full_text = await client.papers.full_text("1706.03762")
     overview = await client.papers.overview("1706.03762")
     overview_status = await client.papers.overview_status("1706.03762")
+    ai_detection = await client.papers.ai_detection("1706.03762")
+    model_links = await client.papers.model_links("1706.03762")
     mentions = await client.papers.mentions("1706.03762")
     similar = await client.papers.similar("1706.03762", limit=5)
     resources = await client.papers.resources("1706.03762")
@@ -88,6 +107,12 @@ async with AlphaXivClient() as client:
 `client.papers.full_text(...)` resolves the input to a paper-version UUID and then calls the public `GET /papers/v3/{paperVersion}/full-text` endpoint.
 
 `client.papers.overview_status(...)` resolves the same paper-version UUID and calls the public `GET /papers/v3/{paperVersion}/overview/status` endpoint.
+
+`client.papers.preview(...)` calls the public compact preview endpoint for the normalized paper identifier and returns title, ids, authors, topics, metrics, image, GitHub fields, and raw payload.
+
+`client.papers.figures(...)` resolves the input to a paper group id before calling the public figures endpoint. Empty figure lists are valid.
+
+`client.papers.ai_detection(...)` and `client.papers.model_links(...)` resolve arXiv ids to paper-version UUIDs before calling their public sidecar endpoints. A sidecar `404` is returned as `None` rather than as a transport failure.
 
 `client.papers.transcript(...)` derives the public podcast transcript URL from the paper's `podcast_path` and fetches `https://paper-podcasts.alphaxiv.org/.../transcript.json` when available.
 

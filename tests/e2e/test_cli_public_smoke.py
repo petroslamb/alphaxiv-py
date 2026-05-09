@@ -8,6 +8,8 @@ from tests.e2e.helpers import SMOKE_PAPER_ID, assert_cli_ok, invoke_cli, require
 
 pytestmark = pytest.mark.e2e
 
+SIDECAR_SMOKE_VERSION_ID = "019e057a-354c-7480-afd1-a79e18674c1e"
+
 
 def test_cli_public_search_and_feed_smoke(
     cli_runner,
@@ -31,6 +33,16 @@ def test_cli_public_search_and_feed_smoke(
     )
     assert_cli_ok(search_json, "search", "papers", "attention is all you need", "--json")
     assert '"paper_id": "1706.03762"' in search_json.output
+
+    rich_search_json = invoke_cli(
+        cli_runner,
+        ["search", "papers", "attention", "--rich", "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(rich_search_json, "search", "papers", "attention", "--rich", "--json")
+    rich_search_payload = json.loads(rich_search_json.output)
+    assert rich_search_payload["papers"]
+    assert rich_search_payload["papers"][0]["title"]
 
     filters_result = invoke_cli(
         cli_runner,
@@ -103,6 +115,23 @@ def test_cli_public_search_and_feed_smoke(
     assert '"topics": [' in filter_search_json.output
 
 
+def test_cli_public_events_smoke(
+    cli_runner,
+    isolated_cli_env: dict[str, str],
+) -> None:
+    require_live_smoke()
+
+    events_json = invoke_cli(
+        cli_runner,
+        ["events", "list", "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(events_json, "events", "list", "--json")
+    events_payload = json.loads(events_json.output)
+    assert events_payload["events"]
+    assert events_payload["events"][0]["title"]
+
+
 def test_cli_public_context_and_paper_reads_smoke(
     cli_runner,
     isolated_cli_env: dict[str, str],
@@ -140,6 +169,26 @@ def test_cli_public_context_and_paper_reads_smoke(
     assert_cli_ok(overview_status_json, "paper", "overview-status", SMOKE_PAPER_ID, "--json")
     assert '"version_id"' in overview_status_json.output
 
+    preview_json = invoke_cli(
+        cli_runner,
+        ["paper", "preview", SMOKE_PAPER_ID, "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(preview_json, "paper", "preview", SMOKE_PAPER_ID, "--json")
+    preview_payload = json.loads(preview_json.output)
+    assert preview_payload["version_id"]
+    assert preview_payload["title"]
+
+    figures_json = invoke_cli(
+        cli_runner,
+        ["paper", "figures", SMOKE_PAPER_ID, "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(figures_json, "paper", "figures", SMOKE_PAPER_ID, "--json")
+    figures_payload = json.loads(figures_json.output)
+    assert figures_payload["paper_group_id"]
+    assert isinstance(figures_payload["figures"], list)
+
     full_text = invoke_cli(
         cli_runner,
         ["paper", "text", SMOKE_PAPER_ID, "--page", "1"],
@@ -175,6 +224,31 @@ def test_cli_public_context_and_paper_reads_smoke(
     assert "Downloaded PDF to:" in download.output
     assert pdf_path.exists()
     assert pdf_path.stat().st_size > 0
+
+
+def test_cli_public_paper_sidecar_smoke(
+    cli_runner,
+    isolated_cli_env: dict[str, str],
+) -> None:
+    require_live_smoke()
+
+    detection_json = invoke_cli(
+        cli_runner,
+        ["paper", "ai-detection", SIDECAR_SMOKE_VERSION_ID, "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(detection_json, "paper", "ai-detection", SIDECAR_SMOKE_VERSION_ID, "--json")
+    detection_payload = json.loads(detection_json.output)
+    assert detection_payload["state"]
+
+    links_json = invoke_cli(
+        cli_runner,
+        ["paper", "model-links", SIDECAR_SMOKE_VERSION_ID, "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(links_json, "paper", "model-links", SIDECAR_SMOKE_VERSION_ID, "--json")
+    links_payload = json.loads(links_json.output)
+    assert links_payload["state"]
 
 
 def test_cli_public_comments_and_similar_smoke(

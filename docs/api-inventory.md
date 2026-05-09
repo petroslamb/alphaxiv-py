@@ -40,13 +40,13 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/organizations/v2/search?q=...` | public | Organization search for labs, universities, and companies. | yes |
 | `GET` | `/organizations/v2/top` | public | Top organizations list used by homepage filtering UI. | yes |
 | `GET` | `/papers/v3/feed?...` | public | Homepage feed cards with sort and filter parameters. | yes |
-| `GET` | `/v1/search/paper?q=...` | public | Rich paper search payload with summaries, metrics, organizations, author info, canonical ids, topics, and repository metadata. | no |
+| `GET` | `/v1/search/paper?q=...` | public | Rich paper search payload with summaries, metrics, organizations, author info, canonical ids, topics, and repository metadata. | yes |
 
 ### Events
 
 | Method | Path | Access | Description | Used by alphaxiv-py |
 | --- | --- | --- | --- | --- |
-| `GET` | `/events/v1` | public | Public alphaXiv events list with title, speaker, organization, link, date, and optional recording. | no |
+| `GET` | `/events/v1` | public | Public alphaXiv events list with title, speaker, organization, link, date, and optional recording. | yes |
 
 ### Papers
 
@@ -55,15 +55,15 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/papers/v3/legacy/{canonical_or_versioned_id}` | public | Main paper metadata payload for canonical or versioned arXiv IDs. | yes |
 | `GET` | `/papers/v3/legacy/{bare_id}` | public | Direct legacy lookup by bare arXiv ID. | yes |
 | `GET` | `/papers/v3/legacy/{paperGroupId}/comments` | public | Public paper comments thread. | yes |
-| `GET` | `/papers/v3/{identifier}` | public | Direct paper-version payload for public arXiv IDs and paper-version UUIDs; accepted as the fallback route for alphaXiv direct identifiers. | no |
-| `GET` | `/papers/v3/{identifier}/preview` | public | Compact public paper preview metadata. | no |
-| `GET` | `/papers/v3/{paperGroupId}/figures` | public | Figure asset paths for a paper group. | no |
+| `GET` | `/papers/v3/{identifier}` | public | Direct paper-version payload for public arXiv IDs and paper-version UUIDs; used as the fallback route for alphaXiv direct identifiers. | yes |
+| `GET` | `/papers/v3/{identifier}/preview` | public | Compact public paper preview metadata. | yes |
+| `GET` | `/papers/v3/{paperGroupId}/figures` | public | Figure asset paths for a paper group. | yes |
 | `POST` | `/papers/v2/{paperVersionId}/comment` | auth write | Creates a top-level paper comment or a reply when `parentCommentId` is set. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/full-text` | public | Page-level extracted paper text. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/{lang}` | public | AI overview or blog payload for a paper version. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/status` | public | Overview generation and translation status. | yes |
-| `GET` | `/papers/v3/{paperVersionId}/ai-detection` | public | AI-detection sidecar for a paper version; returns `404` when no detection data exists. | no |
-| `GET` | `/papers/v3/{paperVersionId}/model-links` | public | Model-link sidecar for model-name matches in a paper version; returns `404` when no sidecar exists. | no |
+| `GET` | `/papers/v3/{paperVersionId}/ai-detection` | public | AI-detection sidecar for a paper version; returns `404` when no detection data exists. | yes |
+| `GET` | `/papers/v3/{paperVersionId}/model-links` | public | Model-link sidecar for model-name matches in a paper version; returns `404` when no sidecar exists. | yes |
 | `GET` | `/papers/v3/x-mentions-db/{paperGroupId}` | public | Social mentions and related resource metadata. | yes |
 | `POST` | `/papers/v3/{paperGroupId}/view` | public write | Records a paper view. | yes |
 | `GET` | `/papers/v3/{paperId}/similar-papers` | public | Similar-papers list shown in the paper UI. | yes |
@@ -112,21 +112,13 @@ These are not under `api.alphaxiv.org`, but they are part of the product surface
 
 These are the endpoint groups currently wired into the SDK and CLI:
 
-- Search: `/search/v2/paper/fast`, `/v1/search/closest-topic`, `/organizations/v2/search`
+- Search: `/search/v2/paper/fast`, `/v1/search/paper`, `/v1/search/closest-topic`, `/organizations/v2/search`
 - Feed support: `/organizations/v2/top`, `/papers/v3/feed`
-- Papers: `/papers/v3/legacy/{id}`, `/papers/v3/legacy/{paperGroupId}/comments`, `/papers/v2/{paperVersionId}/comment`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/x-mentions-db/{paperGroupId}`, `/papers/v3/{paperGroupId}/view`, `/papers/v3/{paperId}/similar-papers`, `/v2/papers/{paperId}/vote`
+- Events: `/events/v1`
+- Papers: `/papers/v3/legacy/{id}`, `/papers/v3/{identifier}`, `/papers/v3/{identifier}/preview`, `/papers/v3/{paperGroupId}/figures`, `/papers/v3/legacy/{paperGroupId}/comments`, `/papers/v2/{paperVersionId}/comment`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/{paperVersionId}/ai-detection`, `/papers/v3/{paperVersionId}/model-links`, `/papers/v3/x-mentions-db/{paperGroupId}`, `/papers/v3/{paperGroupId}/view`, `/papers/v3/{paperId}/similar-papers`, `/v2/papers/{paperId}/vote`
 - Assistant: `/assistant/v2?variant=homepage`, `/assistant/v2?variant=paper&paperVersion=...`, `/assistant/v2/{sessionId}/messages`, `/assistant/v2/chat`, `/assistant/v2/url-metadata`
 - Auth and preferences: `/users/v3`, `/users/v3/preferences`, `/folders/v3`, `/folders/v3/{folderId}/add-papers`, `/folders/v3/{folderId}/remove-papers`, `/comments/v2/{commentId}/upvote`, `/comments/v2/{commentId}`
 - Related hosts: `fetcher.alphaxiv.org` PDF URLs and `paper-podcasts.alphaxiv.org` transcript or podcast assets
-
-## Confirmed Public Endpoints Not Yet Implemented
-
-- `GET /events/v1`: accepted by `specs/features/events-and-rich-paper-search.md`
-  for future `client.events.list()` and `alphaxiv events list` support.
-- `GET /v1/search/paper?q=...`: accepted by
-  `specs/features/events-and-rich-paper-search.md` for future
-  `client.search.papers_rich(query)` and `alphaxiv search papers --rich`
-  support.
 
 ## Notes
 

@@ -6,6 +6,7 @@ The CLI is organized around resource groups:
 - `alphaxiv context`
 - `alphaxiv search`
 - `alphaxiv feed`
+- `alphaxiv events`
 - `alphaxiv paper`
 - `alphaxiv assistant`
 - `alphaxiv folders`
@@ -108,7 +109,9 @@ assistant` to target only one file.
 ```bash
 alphaxiv search all "attention is all you need"
 alphaxiv search papers "attention is all you need"
+alphaxiv search papers "attention is all you need" --rich
 alphaxiv search papers "attention is all you need" --json
+alphaxiv search papers "attention is all you need" --rich --json
 alphaxiv search organizations "attention is all you need"
 alphaxiv search topics "attention is all you need"
 ```
@@ -118,6 +121,10 @@ organization matches when available. Add `--json` for a normalized result object
 
 `search papers` calls only the public paper search endpoint. Add `--json` for a stable list of
 normalized paper matches.
+
+`search papers --rich` calls the richer public paper search endpoint and includes summaries,
+metrics, organizations, author/profile metadata, canonical ids, topics, and repository metadata.
+Add `--json` for normalized rich result objects.
 
 `search organizations` calls only the public organization search endpoint. Add `--json` for
 normalized organization objects.
@@ -166,6 +173,17 @@ ultimately resolves many drawer selections down to raw topic values before calli
 
 `feed list --json` returns the selected filters plus normalized feed cards.
 
+## Events
+
+```bash
+alphaxiv events list
+alphaxiv events list --json
+```
+
+`events list` calls the public alphaXiv events endpoint and prints event date, title, speaker,
+organization, and link. Add `--json` for normalized event objects including optional recording
+URLs and the preserved raw payload.
+
 ## Paper
 
 ```bash
@@ -177,6 +195,14 @@ alphaxiv paper summary 1706.03762 --json
 alphaxiv paper overview 1706.03762
 alphaxiv paper overview 1706.03762 --json
 alphaxiv paper overview-status 1706.03762
+alphaxiv paper preview 1706.03762
+alphaxiv paper preview 1706.03762 --json
+alphaxiv paper figures 1706.03762
+alphaxiv paper figures 1706.03762 --json
+alphaxiv paper ai-detection 1706.03762
+alphaxiv paper ai-detection 1706.03762 --json
+alphaxiv paper model-links 1706.03762
+alphaxiv paper model-links 1706.03762 --json
 alphaxiv paper resources 1706.03762
 alphaxiv paper resources 1706.03762 --bibtex
 alphaxiv paper resources 1706.03762 --transcript
@@ -203,6 +229,10 @@ These read commands support `--json`:
 - `paper summary`
 - `paper overview`
 - `paper overview-status`
+- `paper preview`
+- `paper figures`
+- `paper ai-detection`
+- `paper model-links`
 - `paper resources`
 - `paper text`
 - `paper similar`
@@ -223,6 +253,21 @@ citations. `--machine` and `--json` are mutually exclusive.
 
 `paper overview-status` calls the public overview status endpoint and prints the generation state
 plus available translation languages.
+
+`paper preview` calls the public compact preview endpoint and prints stable paper metadata:
+canonical id, universal id, version id, group id, authors, topics, image, GitHub fields, and
+summary when available.
+
+`paper figures` resolves the input to a paper group id and prints figure asset paths. Empty
+figure lists render as an empty public result, not an error.
+
+`paper ai-detection` resolves the input to a paper-version UUID and prints public AI-detection
+sidecar state, headline, prediction, fractions, and compact window rows. If alphaXiv returns
+sidecar `404`, the command exits successfully with a no-data message; `--json` prints `null`.
+
+`paper model-links` resolves the input to a paper-version UUID and prints public model-link
+matches with provider and model metadata. If alphaXiv returns sidecar `404`, the command exits
+successfully with a no-data message; `--json` prints `null`.
 
 `paper resources --bibtex` prints the paper's BibTeX citation when alphaXiv exposes one. Add
 `--json` to return a normalized `bibtex` object instead of plain text.
