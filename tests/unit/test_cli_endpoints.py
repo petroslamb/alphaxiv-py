@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.types import (
+    AiDetectionWindow,
     CommentAuthor,
     Event,
     ExploreFilterOptions,
@@ -17,8 +18,14 @@ from alphaxiv.types import (
     Folder,
     FolderPaper,
     HomepageSearchResults,
+    LinkedModel,
     OrganizationResult,
+    PaperAiDetection,
     PaperComment,
+    PaperFigures,
+    PaperModelLinkMatch,
+    PaperModelLinks,
+    PaperPreview,
     ResolvedPaper,
     RichPaperAuthor,
     RichPaperOrganization,
@@ -390,6 +397,141 @@ def _comment_fixture() -> list[PaperComment]:
             raw={"id": "comment-root"},
         )
     ]
+
+
+def _preview_fixture() -> PaperPreview:
+    return PaperPreview(
+        id="group-helios",
+        paper_group_id="group-helios",
+        version_id="version-helios",
+        canonical_id="2603.04379v1",
+        universal_paper_id="2603.04379",
+        title="Helios",
+        abstract="We introduce Helios.",
+        paper_summary={"summary": "Real-time long video generation."},
+        image_url="image/2603.04379v1.png",
+        authors=["Shenghai Yuan"],
+        full_authors=[],
+        author_info=[],
+        topics=["Computer Science"],
+        metrics={"public_total_votes": 106},
+        github_url="https://github.com/PKU-YuanGroup/Helios",
+        github_stars=235,
+        raw={},
+    )
+
+
+def _ai_detection_fixture() -> PaperAiDetection:
+    return PaperAiDetection(
+        state="done",
+        headline="Mostly Human Written",
+        prediction_short="Human",
+        fraction_human=0.86,
+        fraction_ai=0.04,
+        fraction_ai_assisted=0.10,
+        windows=[
+            AiDetectionWindow(
+                text="We introduce Helios.",
+                label="human",
+                ai_assistance_score=0.08,
+                confidence="high",
+                page_index=0,
+                start_index=12,
+                end_index=31,
+                raw={"aiAssistanceScore": 0.08},
+            )
+        ],
+        updated_at=1778350000000,
+        raw={"state": "done", "predictionShort": "Human", "windows": []},
+    )
+
+
+def _model_links_fixture() -> PaperModelLinks:
+    return PaperModelLinks(
+        state="done",
+        matches=[
+            PaperModelLinkMatch(
+                matched_text="Helios",
+                page_index=1,
+                start_index=42,
+                end_index=48,
+                model=LinkedModel(
+                    id="model-row",
+                    model_id="helios",
+                    provider_name="PKU-YuanGroup",
+                    model_name="Helios",
+                    description=None,
+                    release_date=1773270000000,
+                    category_rankings=[{"rank": 1}],
+                    raw={},
+                ),
+                raw={},
+            )
+        ],
+        updated_at=1778350000000,
+        is_outdated=False,
+        raw={"state": "done", "isOutdated": False, "matches": []},
+    )
+
+
+def test_paper_preview_command(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(paper_cli, "fetch_preview", lambda _identifier: _preview_fixture())
+
+    result = runner.invoke(cli, ["paper", "preview", "2603.04379"])
+
+    assert result.exit_code == 0
+    assert "Helios" in result.output
+    assert "2603.04379v1" in result.output
+    assert "PKU-YuanGroup/Helios" in result.output
+
+
+def test_paper_figures_command_empty_result(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        paper_cli,
+        "fetch_figures",
+        lambda _identifier: PaperFigures(paper_group_id="group-helios", figures=[], raw={}),
+    )
+
+    result = runner.invoke(cli, ["paper", "figures", "2603.04379"])
+
+    assert result.exit_code == 0
+    assert "No figures were returned" in result.output
+
+
+def test_paper_sidecar_commands(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        paper_cli,
+        "fetch_ai_detection",
+        lambda _identifier: _ai_detection_fixture(),
+    )
+    monkeypatch.setattr(paper_cli, "fetch_model_links", lambda _identifier: _model_links_fixture())
+
+    detection = runner.invoke(cli, ["paper", "ai-detection", "2603.04379"])
+    links = runner.invoke(cli, ["paper", "model-links", "2603.04379"])
+
+    assert detection.exit_code == 0
+    assert "Mostly Human Written" in detection.output
+    assert "Human" in detection.output
+    assert links.exit_code == 0
+    assert "PKU-YuanGroup" in links.output
+    assert "helios" in links.output
+
+
+def test_paper_sidecar_json_and_no_data(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(paper_cli, "fetch_ai_detection", lambda _identifier: None)
+    monkeypatch.setattr(paper_cli, "fetch_model_links", lambda _identifier: _model_links_fixture())
+
+    detection = runner.invoke(cli, ["paper", "ai-detection", "2603.04379", "--json"])
+    links = runner.invoke(cli, ["paper", "model-links", "2603.04379", "--json"])
+
+    assert detection.exit_code == 0
+    assert detection.output.strip() == "null"
+    assert links.exit_code == 0
+    assert '"isOutdated": false' in links.output
 
 
 def test_paper_comments_list_uses_current_context(monkeypatch, tmp_path) -> None:

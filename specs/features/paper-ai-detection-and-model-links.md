@@ -2,13 +2,11 @@
 
 ## Status
 
-Status: Accepted
+Status: Implemented
 
-Owner issue: PET-14
+Owner issue: PET-14.
 
-This Phase 2b spec accepts the public paper AI-detection and model-link
-sidecar endpoints for future implementation. PET-14 does not change SDK or CLI
-behavior.
+Implemented by PET-16 for the paper-side public read expansion.
 
 ## Endpoint Evidence
 
@@ -132,4 +130,5 @@ The JSON form must use the API's camelCase field names when returned through
 ```bash
 uv run python scripts/check_specs.py
 uv run pytest
+ALPHAXIV_RUN_E2E=1 uv run pytest tests/e2e -q
 ```

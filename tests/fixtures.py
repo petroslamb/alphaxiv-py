@@ -144,6 +144,85 @@ LEGACY_PAYLOAD = {
     "comments": [],
 }
 
+DIRECT_PAPER_PAYLOAD = {
+    "groupId": "019cbc05-f11c-75c7-a13b-b028107d6a76",
+    "versionId": "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+    "universalId": "2603.04379",
+    "versionOrder": 1,
+    "title": "Helios: Real Real-Time Long Video Generation Model",
+    "abstract": "We introduce Helios.",
+}
+
+PREVIEW_PAYLOAD = {
+    "id": "019cbc05-f11c-75c7-a13b-b028107d6a76",
+    "paper_group_id": "019cbc05-f11c-75c7-a13b-b028107d6a76",
+    "version_id": "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+    "canonical_id": "2603.04379v1",
+    "universal_paper_id": "2603.04379",
+    "title": "Helios: Real Real-Time Long Video Generation Model",
+    "abstract": "We introduce Helios.",
+    "paper_summary": {"summary": "Real-time long video generation.", "results": ["19.53 FPS"]},
+    "image_url": "image/2603.04379v1.png",
+    "authors": ["Shenghai Yuan", "Yuanyang Yin"],
+    "full_authors": [{"id": "author-1", "full_name": "Shenghai Yuan"}],
+    "author_info": [],
+    "topics": ["Computer Science", "generative-models"],
+    "metrics": {"public_total_votes": 106, "visits_count": {"all": 2974}},
+    "github_url": "https://github.com/PKU-YuanGroup/Helios",
+    "github_stars": 235,
+}
+
+FIGURES_PAYLOAD = {
+    "figures": [
+        "figures/1706.03762v7/ModalNet-19.png",
+        "figures/1706.03762v7/ModalNet-20.png",
+    ]
+}
+
+AI_DETECTION_PAYLOAD = {
+    "state": "done",
+    "headline": "Mostly Human Written",
+    "predictionShort": "Human",
+    "fractionHuman": 0.86,
+    "fractionAi": 0.04,
+    "fractionAiAssisted": 0.10,
+    "windows": [
+        {
+            "text": "We introduce Helios.",
+            "label": "human",
+            "aiAssistanceScore": 0.08,
+            "confidence": "high",
+            "pageIndex": 0,
+            "startIndex": 12,
+            "endIndex": 31,
+        }
+    ],
+    "updatedAt": 1778350000000,
+}
+
+MODEL_LINKS_PAYLOAD = {
+    "state": "done",
+    "matches": [
+        {
+            "matchedText": "Helios",
+            "pageIndex": 1,
+            "startIndex": 42,
+            "endIndex": 48,
+            "model": {
+                "id": "model-row",
+                "modelId": "helios",
+                "providerName": "PKU-YuanGroup",
+                "modelName": "Helios",
+                "description": "Real-time long video generation model.",
+                "releaseDate": 1773270000000,
+                "categoryRankings": [{"category": "video", "rank": 1}],
+            },
+        }
+    ],
+    "updatedAt": 1778350000000,
+    "isOutdated": False,
+}
+
 OVERVIEW_PAYLOAD = {
     "title": "Helios: Real Real-Time Long Video Generation Model",
     "abstract": "We introduce Helios.",

@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import pytest
 from tests.fixtures import (
+    AI_DETECTION_PAYLOAD,
     ASSISTANT_ERROR_STREAM_RESPONSE,
     ASSISTANT_HISTORY_PAYLOAD,
     ASSISTANT_HOME_SESSIONS_AFTER_PAYLOAD,
@@ -16,17 +17,21 @@ from tests.fixtures import (
     COMMENT_REPLY_RESPONSE,
     COMMENT_UPVOTE_RESPONSE,
     COMMENTS_PAYLOAD,
+    DIRECT_PAPER_PAYLOAD,
     EVENTS_PAYLOAD,
     EXPLORE_FEED_PAYLOAD,
+    FIGURES_PAYLOAD,
     FOLDERS_PAYLOAD,
     FULL_TEXT_PAYLOAD,
     LEGACY_PAYLOAD,
     MENTIONS_PAYLOAD,
+    MODEL_LINKS_PAYLOAD,
     ORGANIZATION_SEARCH_PAYLOAD,
     OVERVIEW_PAYLOAD,
     OVERVIEW_STATUS_PAYLOAD,
     PAPER_VIEW_RESPONSE,
     PAPER_VOTE_RESPONSE,
+    PREVIEW_PAYLOAD,
     RICH_PAPER_SEARCH_PAYLOAD,
     SEARCH_PAYLOAD,
     SIMILAR_PAPERS_PAYLOAD,
@@ -277,6 +282,161 @@ async def test_get_bare_id_resolution(httpx_mock) -> None:
 
     assert paper.resolved.canonical_id == "2603.04379v1"
     assert paper.version.id == "019cbc05-f158-7e3a-b9c1-a43274c0130b"
+
+
+@pytest.mark.asyncio
+async def test_direct_slug_resolution_fallback(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/helios-real-real-time-long-video-generation-model",
+        json=DIRECT_PAPER_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        resolved = await client.papers.resolve("helios-real-real-time-long-video-generation-model")
+
+    assert resolved.canonical_id == "2603.04379v1"
+    assert resolved.version_id == "019cbc05-f158-7e3a-b9c1-a43274c0130b"
+    assert resolved.group_id == "019cbc05-f11c-75c7-a13b-b028107d6a76"
+
+
+@pytest.mark.asyncio
+async def test_legacy_resolution_falls_back_to_direct_paper(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379",
+        status_code=404,
+        json={"error": {"message": "Paper not found"}},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/2603.04379",
+        json=DIRECT_PAPER_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        resolved = await client.papers.resolve("2603.04379")
+
+    assert resolved.canonical_id == "2603.04379v1"
+    assert resolved.group_id == "019cbc05-f11c-75c7-a13b-b028107d6a76"
+
+
+@pytest.mark.asyncio
+async def test_paper_preview_by_arxiv_id(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/2603.04379/preview",
+        json=PREVIEW_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        preview = await client.papers.preview("2603.04379")
+
+    assert preview.title == "Helios: Real Real-Time Long Video Generation Model"
+    assert preview.canonical_id == "2603.04379v1"
+    assert preview.github_stars == 235
+
+
+@pytest.mark.asyncio
+async def test_paper_figures_resolves_arxiv_id(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f11c-75c7-a13b-b028107d6a76/figures",
+        json=FIGURES_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        figures = await client.papers.figures("2603.04379")
+
+    assert figures.paper_group_id == "019cbc05-f11c-75c7-a13b-b028107d6a76"
+    assert figures.figures[0].endswith("ModalNet-19.png")
+
+
+@pytest.mark.asyncio
+async def test_paper_figures_resolves_version_uuid(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b",
+        json=DIRECT_PAPER_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f11c-75c7-a13b-b028107d6a76/figures",
+        json={"figures": []},
+    )
+
+    async with AlphaXivClient() as client:
+        empty_figures = await client.papers.figures("019cbc05-f158-7e3a-b9c1-a43274c0130b")
+
+    assert empty_figures.figures == []
+
+
+@pytest.mark.asyncio
+async def test_paper_figures_preserves_direct_uuid_server_errors(httpx_mock) -> None:
+    for _attempt in range(3):
+        httpx_mock.add_response(
+            method="GET",
+            url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b",
+            status_code=500,
+            json={"error": {"message": "Direct resolver failed"}},
+        )
+
+    async with AlphaXivClient() as client:
+        with pytest.raises(APIError, match="Direct resolver failed"):
+            await client.papers.figures("019cbc05-f158-7e3a-b9c1-a43274c0130b")
+
+    assert len(httpx_mock.get_requests()) == 3
+
+
+@pytest.mark.asyncio
+async def test_paper_sidecars_resolve_arxiv_and_handle_no_data(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/ai-detection",
+        json=AI_DETECTION_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/model-links",
+        json=MODEL_LINKS_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/ai-detection",
+        status_code=404,
+        json={"error": {"message": "Ai detection not found"}},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/model-links",
+        status_code=404,
+        json={"error": {"message": "Paper model links not found"}},
+    )
+
+    async with AlphaXivClient() as client:
+        detection = await client.papers.ai_detection("2603.04379")
+        links = await client.papers.model_links("2603.04379")
+        missing_detection = await client.papers.ai_detection("019cbc05-f158-7e3a-b9c1-a43274c0130b")
+        missing_links = await client.papers.model_links("019cbc05-f158-7e3a-b9c1-a43274c0130b")
+
+    assert detection is not None
+    assert detection.prediction_short == "Human"
+    assert detection.windows[0].ai_assistance_score == 0.08
+    assert links is not None
+    assert links.matches[0].model is not None
+    assert links.matches[0].model.model_id == "helios"
+    assert missing_detection is None
+    assert missing_links is None
 
 
 @pytest.mark.asyncio

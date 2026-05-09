@@ -15,9 +15,13 @@ from ..types import (
     Folder,
     OverviewStatus,
     Paper,
+    PaperAiDetection,
     PaperComment,
+    PaperFigures,
     PaperFullText,
+    PaperModelLinks,
     PaperOverview,
+    PaperPreview,
     PaperResources,
     PaperTranscript,
 )
@@ -32,13 +36,17 @@ from .helpers import (
 from .messages import click_error, usage_error
 from .serialize import (
     reject_raw_and_json,
+    serialize_ai_detection,
     serialize_feed_card,
     serialize_folder,
     serialize_full_text,
+    serialize_model_links,
     serialize_overview_status,
     serialize_paper,
     serialize_paper_comment,
+    serialize_paper_figures,
     serialize_paper_overview,
+    serialize_paper_preview,
     serialize_paper_resources,
     serialize_transcript,
 )
@@ -158,6 +166,38 @@ def fetch_full_text(identifier: str) -> PaperFullText:
         suggestions=(f"alphaxiv paper pdf download {identifier} ./paper.pdf",),
         see_help="alphaxiv paper text --help",
     )
+
+
+def fetch_preview(identifier: str) -> PaperPreview:
+    async def _get() -> PaperPreview:
+        async with make_client() as client:
+            return await client.papers.preview(identifier)
+
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper preview --help")
+
+
+def fetch_figures(identifier: str) -> PaperFigures:
+    async def _get() -> PaperFigures:
+        async with make_client() as client:
+            return await client.papers.figures(identifier)
+
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper figures --help")
+
+
+def fetch_ai_detection(identifier: str) -> PaperAiDetection | None:
+    async def _get() -> PaperAiDetection | None:
+        async with make_client() as client:
+            return await client.papers.ai_detection(identifier)
+
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper ai-detection --help")
+
+
+def fetch_model_links(identifier: str) -> PaperModelLinks | None:
+    async def _get() -> PaperModelLinks | None:
+        async with make_client() as client:
+            return await client.papers.model_links(identifier)
+
+    return run_async_with_click_errors(_get(), see_help="alphaxiv paper model-links --help")
 
 
 def fetch_comments(identifier: str) -> list[PaperComment]:
@@ -367,6 +407,117 @@ def _render_similar_cards(cards: list[FeedCard]) -> None:
             ", ".join(card.topics[:3]) or "-",
         )
     console.print(table)
+
+
+def _shorten(value: str, limit: int = 72) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 3].rstrip()}..."
+
+
+def _render_preview(preview: PaperPreview) -> None:
+    table = Table(title=preview.title or "Paper Preview")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("Canonical ID", preview.canonical_id or "-")
+    table.add_row("Universal ID", preview.universal_paper_id or "-")
+    table.add_row("Version UUID", preview.version_id or "-")
+    table.add_row("Group UUID", preview.paper_group_id or "-")
+    table.add_row("Authors", ", ".join(preview.authors) or "-")
+    table.add_row("Topics", ", ".join(preview.topics) or "-")
+    table.add_row("Image", preview.image_url or "-")
+    table.add_row("GitHub", preview.github_url or "-")
+    table.add_row(
+        "GitHub Stars", str(preview.github_stars) if preview.github_stars is not None else "-"
+    )
+    console.print(table)
+    if preview.paper_summary and preview.paper_summary.get("summary"):
+        console.print()
+        console.print(preview.paper_summary["summary"])
+
+
+def _render_figures(figures: PaperFigures) -> None:
+    table = Table(title=f"Paper Figures for {figures.paper_group_id}")
+    table.add_column("Figure")
+    for figure in figures.figures:
+        table.add_row(figure)
+    console.print(table)
+
+
+def _render_ai_detection(detection: PaperAiDetection | None, identifier: str) -> None:
+    if detection is None:
+        console.print(f"[yellow]No AI-detection data was available for '{identifier}'.[/yellow]")
+        return
+    table = Table(title="Paper AI Detection")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("State", detection.state or "-")
+    table.add_row("Headline", detection.headline or "-")
+    table.add_row("Prediction", detection.prediction_short or "-")
+    table.add_row(
+        "Human", str(detection.fraction_human) if detection.fraction_human is not None else "-"
+    )
+    table.add_row("AI", str(detection.fraction_ai) if detection.fraction_ai is not None else "-")
+    table.add_row(
+        "AI-assisted",
+        str(detection.fraction_ai_assisted) if detection.fraction_ai_assisted is not None else "-",
+    )
+    table.add_row(
+        "Updated At", str(detection.updated_at) if detection.updated_at is not None else "-"
+    )
+    console.print(table)
+
+    windows = Table(title=f"Windows ({len(detection.windows)})")
+    windows.add_column("Label")
+    windows.add_column("Confidence")
+    windows.add_column("Score")
+    windows.add_column("Page")
+    windows.add_column("Range")
+    windows.add_column("Text")
+    for window in detection.windows[:10]:
+        windows.add_row(
+            window.label or "-",
+            window.confidence or "-",
+            str(window.ai_assistance_score) if window.ai_assistance_score is not None else "-",
+            str(window.page_index) if window.page_index is not None else "-",
+            f"{window.start_index or 0}-{window.end_index or 0}",
+            _shorten(window.text),
+        )
+    console.print(windows)
+
+
+def _render_model_links(links: PaperModelLinks | None, identifier: str) -> None:
+    if links is None:
+        console.print(f"[yellow]No model-link data was available for '{identifier}'.[/yellow]")
+        return
+    table = Table(title="Paper Model Links")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("State", links.state or "-")
+    table.add_row("Outdated", str(links.is_outdated) if links.is_outdated is not None else "-")
+    table.add_row("Updated At", str(links.updated_at) if links.updated_at is not None else "-")
+    table.add_row("Matches", str(len(links.matches)))
+    console.print(table)
+
+    matches = Table(title=f"Matches ({len(links.matches)})")
+    matches.add_column("Text")
+    matches.add_column("Page")
+    matches.add_column("Range")
+    matches.add_column("Provider")
+    matches.add_column("Model")
+    matches.add_column("Model ID")
+    for match in links.matches[:10]:
+        model = match.model
+        matches.add_row(
+            _shorten(match.matched_text, limit=48),
+            str(match.page_index) if match.page_index is not None else "-",
+            f"{match.start_index or 0}-{match.end_index or 0}",
+            model.provider_name if model and model.provider_name else "-",
+            model.model_name if model and model.model_name else "-",
+            model.model_id if model and model.model_id else "-",
+        )
+    console.print(matches)
 
 
 def _render_paper_folder_membership(
@@ -587,6 +738,61 @@ def paper_overview_status(paper_id: str | None, json_output: bool) -> None:
                 translation.error or "-",
             )
         console.print(translations)
+
+
+@paper.command("preview")
+@click.argument("paper_id", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def paper_preview(paper_id: str | None, json_output: bool) -> None:
+    """Show compact public paper preview metadata."""
+    identifier = get_effective_identifier(paper_id)
+    preview_obj = fetch_preview(identifier)
+    if json_output:
+        print_json(serialize_paper_preview(preview_obj, requested_id=identifier))
+        return
+    _render_preview(preview_obj)
+
+
+@paper.command("figures")
+@click.argument("paper_id", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
+def paper_figures(paper_id: str | None, json_output: bool) -> None:
+    """Show figure asset paths for a paper."""
+    identifier = get_effective_identifier(paper_id)
+    figures_obj = fetch_figures(identifier)
+    if json_output:
+        print_json(serialize_paper_figures(figures_obj, requested_id=identifier))
+        return
+    if not figures_obj.figures:
+        console.print(f"[yellow]No figures were returned for '{identifier}'.[/yellow]")
+        return
+    _render_figures(figures_obj)
+
+
+@paper.command("ai-detection")
+@click.argument("paper_id", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Print machine-readable JSON.")
+def paper_ai_detection(paper_id: str | None, json_output: bool) -> None:
+    """Show public AI-detection sidecar data for a paper."""
+    identifier = get_effective_identifier(paper_id)
+    detection = fetch_ai_detection(identifier)
+    if json_output:
+        print_json(serialize_ai_detection(detection))
+        return
+    _render_ai_detection(detection, identifier)
+
+
+@paper.command("model-links")
+@click.argument("paper_id", required=False)
+@click.option("--json", "json_output", is_flag=True, help="Print machine-readable JSON.")
+def paper_model_links(paper_id: str | None, json_output: bool) -> None:
+    """Show public model-link matches for a paper."""
+    identifier = get_effective_identifier(paper_id)
+    links = fetch_model_links(identifier)
+    if json_output:
+        print_json(serialize_model_links(links))
+        return
+    _render_model_links(links, identifier)
 
 
 @paper.command("resources")

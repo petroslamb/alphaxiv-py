@@ -2,12 +2,11 @@
 
 ## Status
 
-Status: Accepted
+Status: Implemented
 
 Owner issue: PET-13.
 
-This Phase 2a spec accepts public read behavior only. SDK and CLI behavior may
-ship in a later implementation PR, but this PR does not implement it.
+Implemented by PET-16 for the paper-side public read expansion.
 
 ## Endpoint Evidence
 
@@ -120,4 +119,5 @@ ship in a later implementation PR, but this PR does not implement it.
 ```bash
 uv run python scripts/check_specs.py
 uv run pytest
+ALPHAXIV_RUN_E2E=1 uv run pytest tests/e2e -q
 ```

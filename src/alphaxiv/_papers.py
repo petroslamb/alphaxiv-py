@@ -14,15 +14,19 @@ from ._identifiers import (
     is_versioned_arxiv_id,
     normalize_identifier,
 )
-from .exceptions import AuthRequiredError, ResolutionError
+from .exceptions import APIError, AuthRequiredError, ResolutionError
 from .types import (
     FeedCard,
     Mention,
     OverviewStatus,
     Paper,
+    PaperAiDetection,
     PaperComment,
+    PaperFigures,
     PaperFullText,
+    PaperModelLinks,
     PaperOverview,
+    PaperPreview,
     PaperResources,
     PaperTranscript,
     ResolvedPaper,
@@ -56,21 +60,20 @@ class PapersAPI:
             return resolved
 
         if is_versioned_arxiv_id(normalized):
-            payload = await self._get_legacy_payload(normalized)
+            payload = await self._get_legacy_or_direct_payload(identifier, normalized)
             resolved = self._resolved_from_legacy(identifier, payload)
             self._cache_resolution(normalized, resolved)
             return resolved
 
         if is_bare_arxiv_id(normalized):
-            payload = await self._get_legacy_payload(normalized)
+            payload = await self._get_legacy_or_direct_payload(identifier, normalized)
             resolved = self._resolved_from_legacy(identifier, payload)
             self._cache_resolution(normalized, resolved)
             return resolved
 
-        raise ResolutionError(
-            f"Unsupported identifier '{identifier}'. Expected a bare arXiv ID, "
-            "versioned arXiv ID, or paper-version UUID."
-        )
+        resolved = await self._resolve_direct(identifier, normalized)
+        self._cache_resolution(normalized, resolved)
+        return resolved
 
     async def get(self, identifier: str) -> Paper:
         resolved = await self.resolve(identifier)
@@ -120,6 +123,50 @@ class PapersAPI:
         if not isinstance(payload, dict):
             raise ResolutionError(f"Unexpected full-text payload for '{identifier}'.")
         return PaperFullText.from_payload(resolved, payload)
+
+    async def preview(self, identifier: str) -> PaperPreview:
+        normalized = normalize_identifier(identifier)
+        if not normalized:
+            raise ResolutionError("Paper preview requires a paper identifier.")
+        payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/{normalized}/preview")
+        if not isinstance(payload, dict):
+            raise ResolutionError(f"Unexpected preview payload for '{identifier}'.")
+        return PaperPreview.from_payload(payload)
+
+    async def figures(self, identifier: str) -> PaperFigures:
+        group_id = await self._resolve_group_id_for_public_read(identifier)
+        payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/{group_id}/figures")
+        if not isinstance(payload, dict):
+            raise ResolutionError(f"Unexpected figures payload for '{identifier}'.")
+        return PaperFigures.from_payload(paper_group_id=group_id, payload=payload)
+
+    async def ai_detection(self, identifier: str) -> PaperAiDetection | None:
+        version_id = await self._resolve_version_id_for_public_read(identifier)
+        try:
+            payload = await self._core.get_json(
+                f"{BASE_API_URL}/papers/v3/{version_id}/ai-detection"
+            )
+        except APIError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
+        if not isinstance(payload, dict):
+            raise ResolutionError(f"Unexpected AI-detection payload for '{identifier}'.")
+        return PaperAiDetection.from_payload(payload)
+
+    async def model_links(self, identifier: str) -> PaperModelLinks | None:
+        version_id = await self._resolve_version_id_for_public_read(identifier)
+        try:
+            payload = await self._core.get_json(
+                f"{BASE_API_URL}/papers/v3/{version_id}/model-links"
+            )
+        except APIError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
+        if not isinstance(payload, dict):
+            raise ResolutionError(f"Unexpected model-links payload for '{identifier}'.")
+        return PaperModelLinks.from_payload(payload)
 
     async def mentions(self, identifier: str) -> list[Mention]:
         resolved = await self.resolve(identifier)
@@ -299,6 +346,80 @@ class PapersAPI:
         self._cache_legacy_payload(canonical_id, payload)
         return payload
 
+    async def _get_legacy_or_direct_payload(
+        self,
+        input_id: str,
+        normalized: str,
+    ) -> dict[str, Any]:
+        try:
+            return await self._get_legacy_payload(normalized)
+        except APIError as legacy_error:
+            try:
+                resolved = await self._resolve_direct(input_id, normalized)
+            except APIError:
+                raise legacy_error from None
+            return self._legacy_like_payload_from_resolved(resolved)
+
+    async def _resolve_direct(self, input_id: str, normalized: str) -> ResolvedPaper:
+        try:
+            payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/{normalized}")
+        except APIError as exc:
+            raise ResolutionError(
+                f"Could not resolve paper identifier '{input_id}' through alphaXiv."
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ResolutionError(f"Unexpected direct paper payload for '{input_id}'.")
+        resolved = self._resolved_from_direct(input_id, payload)
+        if not resolved.version_id and not resolved.group_id:
+            raise ResolutionError(f"Could not determine paper ids for '{input_id}'.")
+        return resolved
+
+    def _resolved_from_direct(self, input_id: str, payload: dict[str, Any]) -> ResolvedPaper:
+        versionless_id = (
+            payload.get("universalId")
+            or payload.get("universal_paper_id")
+            or payload.get("universalPaperId")
+        )
+        version_order = payload.get("versionOrder") or payload.get("version_order")
+        canonical_id = payload.get("canonicalId") or payload.get("canonical_id")
+        if not canonical_id and versionless_id and isinstance(version_order, int):
+            canonical_id = f"{versionless_id}v{version_order}"
+        return ResolvedPaper(
+            input_id=input_id,
+            versionless_id=versionless_id,
+            canonical_id=canonical_id,
+            version_id=payload.get("versionId") or payload.get("version_id") or payload.get("id"),
+            group_id=payload.get("groupId")
+            or payload.get("group_id")
+            or payload.get("paper_group_id"),
+            title=payload.get("title"),
+            raw=payload,
+        )
+
+    def _legacy_like_payload_from_resolved(self, resolved: ResolvedPaper) -> dict[str, Any]:
+        payload = {
+            "paper": {
+                "paper_version": {
+                    "id": resolved.version_id,
+                    "version_label": self._version_label_from_canonical(resolved.canonical_id),
+                    "title": resolved.title,
+                    "universal_paper_id": resolved.versionless_id,
+                },
+                "paper_group": {
+                    "id": resolved.group_id,
+                    "title": resolved.title,
+                    "universal_paper_id": resolved.versionless_id,
+                },
+            },
+            "comments": [],
+        }
+        return payload
+
+    def _version_label_from_canonical(self, canonical_id: str | None) -> str | None:
+        if not canonical_id or "v" not in canonical_id:
+            return None
+        return f"v{canonical_id.rsplit('v', 1)[1]}"
+
     def _resolved_from_legacy(self, input_id: str, payload: dict[str, Any]) -> ResolvedPaper:
         paper = payload.get("paper") or {}
         version = paper.get("paper_version") or {}
@@ -344,6 +465,34 @@ class PapersAPI:
             aliases.add(f"{versionless_id}{version_label}")
         for alias in aliases:
             self._legacy_cache[alias] = payload
+
+    async def _resolve_group_id_for_public_read(self, identifier: str) -> str:
+        normalized = normalize_identifier(identifier)
+        if is_paper_version_uuid(normalized):
+            if normalized in self._resolution_cache and self._resolution_cache[normalized].group_id:
+                return str(self._resolution_cache[normalized].group_id)
+            try:
+                payload = await self._core.get_json(f"{BASE_API_URL}/papers/v3/{normalized}")
+            except APIError as exc:
+                if exc.status_code == 404:
+                    return normalized
+                raise
+            if not isinstance(payload, dict):
+                raise ResolutionError(f"Unexpected direct paper payload for '{identifier}'.")
+            resolved = self._resolved_from_direct(identifier, payload)
+            if not resolved.version_id and not resolved.group_id:
+                return normalized
+            self._cache_resolution(normalized, resolved)
+            return self._require_group_id(identifier, resolved, operation="Figures lookup")
+        resolved = await self.resolve(identifier)
+        return self._require_group_id(identifier, resolved, operation="Figures lookup")
+
+    async def _resolve_version_id_for_public_read(self, identifier: str) -> str:
+        normalized = normalize_identifier(identifier)
+        if is_paper_version_uuid(normalized):
+            return normalized
+        resolved = await self.resolve(identifier)
+        return self._require_version_id(identifier, resolved, operation="Paper sidecar lookup")
 
     def _require_auth(self, message: str) -> None:
         if not self._core.authorization:

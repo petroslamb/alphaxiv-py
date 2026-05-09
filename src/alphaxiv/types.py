@@ -907,6 +907,229 @@ class Paper:
 
 
 @dataclass(slots=True)
+class PaperPreview:
+    id: str
+    paper_group_id: str | None
+    version_id: str | None
+    canonical_id: str | None
+    universal_paper_id: str | None
+    title: str
+    abstract: str
+    paper_summary: dict[str, Any] | None
+    image_url: str | None
+    authors: list[str]
+    full_authors: list[dict[str, Any]]
+    author_info: list[dict[str, Any]]
+    topics: list[str]
+    metrics: dict[str, Any]
+    github_url: str | None
+    github_stars: int | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PaperPreview:
+        metrics = payload.get("metrics")
+        if not isinstance(metrics, dict):
+            metrics = {}
+        return cls(
+            id=payload.get("id", ""),
+            paper_group_id=payload.get("paper_group_id") or payload.get("paperGroupId"),
+            version_id=payload.get("version_id") or payload.get("versionId"),
+            canonical_id=payload.get("canonical_id") or payload.get("canonicalId"),
+            universal_paper_id=payload.get("universal_paper_id") or payload.get("universalId"),
+            title=payload.get("title", ""),
+            abstract=payload.get("abstract", ""),
+            paper_summary=payload.get("paper_summary")
+            if isinstance(payload.get("paper_summary"), dict)
+            else None,
+            image_url=payload.get("image_url") or payload.get("imageUrl"),
+            authors=[str(item) for item in payload.get("authors") or []],
+            full_authors=[
+                item for item in payload.get("full_authors") or [] if isinstance(item, dict)
+            ],
+            author_info=[
+                item for item in payload.get("author_info") or [] if isinstance(item, dict)
+            ],
+            topics=[str(item) for item in payload.get("topics") or []],
+            metrics=metrics,
+            github_url=payload.get("github_url") or payload.get("githubUrl"),
+            github_stars=payload.get("github_stars")
+            if isinstance(payload.get("github_stars"), int)
+            else payload.get("githubStars")
+            if isinstance(payload.get("githubStars"), int)
+            else None,
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class PaperFigures:
+    paper_group_id: str
+    figures: list[str]
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, *, paper_group_id: str, payload: dict[str, Any]) -> PaperFigures:
+        return cls(
+            paper_group_id=paper_group_id,
+            figures=[str(item) for item in payload.get("figures") or []],
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class AiDetectionWindow:
+    text: str
+    label: str | None
+    ai_assistance_score: float | None
+    confidence: str | None
+    page_index: int | None
+    start_index: int | None
+    end_index: int | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> AiDetectionWindow:
+        return cls(
+            text=payload.get("text", ""),
+            label=payload.get("label"),
+            ai_assistance_score=payload.get("aiAssistanceScore")
+            if isinstance(payload.get("aiAssistanceScore"), int | float)
+            else None,
+            confidence=payload.get("confidence"),
+            page_index=payload.get("pageIndex")
+            if isinstance(payload.get("pageIndex"), int)
+            else None,
+            start_index=payload.get("startIndex")
+            if isinstance(payload.get("startIndex"), int)
+            else None,
+            end_index=payload.get("endIndex") if isinstance(payload.get("endIndex"), int) else None,
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class PaperAiDetection:
+    state: str
+    headline: str | None
+    prediction_short: str | None
+    fraction_human: float | None
+    fraction_ai: float | None
+    fraction_ai_assisted: float | None
+    windows: list[AiDetectionWindow]
+    updated_at: int | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PaperAiDetection:
+        return cls(
+            state=payload.get("state", ""),
+            headline=payload.get("headline"),
+            prediction_short=payload.get("predictionShort"),
+            fraction_human=payload.get("fractionHuman")
+            if isinstance(payload.get("fractionHuman"), int | float)
+            else None,
+            fraction_ai=payload.get("fractionAi")
+            if isinstance(payload.get("fractionAi"), int | float)
+            else None,
+            fraction_ai_assisted=payload.get("fractionAiAssisted")
+            if isinstance(payload.get("fractionAiAssisted"), int | float)
+            else None,
+            windows=[
+                AiDetectionWindow.from_payload(item)
+                for item in payload.get("windows") or []
+                if isinstance(item, dict)
+            ],
+            updated_at=payload.get("updatedAt")
+            if isinstance(payload.get("updatedAt"), int)
+            else None,
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class LinkedModel:
+    id: str | None
+    model_id: str | None
+    provider_name: str | None
+    model_name: str | None
+    description: str | None
+    release_date: int | None
+    category_rankings: list[Any]
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> LinkedModel:
+        return cls(
+            id=payload.get("id"),
+            model_id=payload.get("modelId"),
+            provider_name=payload.get("providerName"),
+            model_name=payload.get("modelName"),
+            description=payload.get("description"),
+            release_date=payload.get("releaseDate")
+            if isinstance(payload.get("releaseDate"), int)
+            else None,
+            category_rankings=list(payload.get("categoryRankings") or []),
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class PaperModelLinkMatch:
+    matched_text: str
+    page_index: int | None
+    start_index: int | None
+    end_index: int | None
+    model: LinkedModel | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PaperModelLinkMatch:
+        model_payload = payload.get("model")
+        return cls(
+            matched_text=payload.get("matchedText", ""),
+            page_index=payload.get("pageIndex")
+            if isinstance(payload.get("pageIndex"), int)
+            else None,
+            start_index=payload.get("startIndex")
+            if isinstance(payload.get("startIndex"), int)
+            else None,
+            end_index=payload.get("endIndex") if isinstance(payload.get("endIndex"), int) else None,
+            model=LinkedModel.from_payload(model_payload)
+            if isinstance(model_payload, dict)
+            else None,
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
+class PaperModelLinks:
+    state: str
+    matches: list[PaperModelLinkMatch]
+    updated_at: int | None
+    is_outdated: bool | None
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PaperModelLinks:
+        return cls(
+            state=payload.get("state", ""),
+            matches=[
+                PaperModelLinkMatch.from_payload(item)
+                for item in payload.get("matches") or []
+                if isinstance(item, dict)
+            ],
+            updated_at=payload.get("updatedAt")
+            if isinstance(payload.get("updatedAt"), int)
+            else None,
+            is_outdated=payload.get("isOutdated")
+            if isinstance(payload.get("isOutdated"), bool)
+            else None,
+            raw=payload,
+        )
+
+
+@dataclass(slots=True)
 class OverviewSummary:
     summary: str
     original_problem: list[str]

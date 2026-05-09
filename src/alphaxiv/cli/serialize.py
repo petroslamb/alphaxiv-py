@@ -26,9 +26,13 @@ from ..types import (
     OverviewSummary,
     OverviewTranslationStatus,
     Paper,
+    PaperAiDetection,
     PaperComment,
+    PaperFigures,
     PaperFullText,
+    PaperModelLinks,
     PaperOverview,
+    PaperPreview,
     PaperResources,
     PaperTextPage,
     PaperTranscript,
@@ -222,6 +226,52 @@ def serialize_paper(paper: Paper, *, requested_id: str | None = None) -> dict[st
         "implementation": paper.implementation,
         "marimo_implementation": paper.marimo_implementation,
     }
+
+
+def serialize_paper_preview(
+    preview: PaperPreview,
+    *,
+    requested_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "requested_id": requested_id,
+        "id": preview.id,
+        "paper_group_id": preview.paper_group_id,
+        "version_id": preview.version_id,
+        "canonical_id": preview.canonical_id,
+        "universal_paper_id": preview.universal_paper_id,
+        "title": preview.title,
+        "abstract": preview.abstract,
+        "paper_summary": preview.paper_summary,
+        "image_url": preview.image_url,
+        "authors": list(preview.authors),
+        "full_authors": list(preview.full_authors),
+        "author_info": list(preview.author_info),
+        "topics": list(preview.topics),
+        "metrics": dict(preview.metrics),
+        "github_url": preview.github_url,
+        "github_stars": preview.github_stars,
+    }
+
+
+def serialize_paper_figures(
+    figures: PaperFigures,
+    *,
+    requested_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "requested_id": requested_id,
+        "paper_group_id": figures.paper_group_id,
+        "figures": list(figures.figures),
+    }
+
+
+def serialize_ai_detection(detection: PaperAiDetection | None) -> dict[str, Any] | None:
+    return detection.raw if detection is not None else None
+
+
+def serialize_model_links(links: PaperModelLinks | None) -> dict[str, Any] | None:
+    return links.raw if links is not None else None
 
 
 def serialize_overview_summary(summary: OverviewSummary | None) -> dict[str, Any] | None:
