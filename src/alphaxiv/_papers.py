@@ -175,10 +175,15 @@ class PapersAPI:
         self,
         identifier: str,
         *,
+        language: str = "en",
         timeout: float = 300.0,
         poll_interval: float = 2.0,
     ) -> OverviewStatus:
-        """Poll overview status until it reaches a terminal state."""
+        """Poll overview status until it reaches a terminal state.
+
+        If ``language`` is not the default, waits for the corresponding translation status to
+        reach a terminal state as well.
+        """
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         last_status: OverviewStatus | None = None
@@ -199,7 +204,23 @@ class PapersAPI:
                 last_url = f"{BASE_API_URL}/papers/v3/{last_status.version_id}/overview/status"
                 last_state = (last_status.state or "").strip().lower() or None
                 if last_state and last_state not in pending_states:
-                    return last_status
+                    if language == "en":
+                        return last_status
+                    translation = last_status.translations.get(language)
+                    if translation is None:
+                        # The base overview can be complete while the translation record is still
+                        # being created/queued.
+                        pass
+                    else:
+                        translation_state = (translation.state or "").strip().lower() or None
+                        if translation_state and translation_state not in pending_states:
+                            if translation.error:
+                                raise APIError(
+                                    f"Overview translation failed: {translation.error}",
+                                    status_code=502,
+                                    url=last_url,
+                                )
+                            return last_status
             if loop.time() >= deadline:
                 message = "Overview generation did not complete before timeout."
                 if last_state:

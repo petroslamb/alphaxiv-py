@@ -137,5 +137,5 @@ class AlphaXivClient:
             # The UI returns 409 when the overview was already requested.
             if exc.status_code != 409:
                 raise
-        await self.papers.wait_for_overview(identifier, timeout=wait_timeout)
+        await self.papers.wait_for_overview(identifier, language=language, timeout=wait_timeout)
         return await self.papers.overview(identifier, language=language)
