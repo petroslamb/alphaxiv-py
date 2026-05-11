@@ -669,6 +669,7 @@ def show_summary(paper_id: str | None, language: str, raw: bool, json_output: bo
 @click.option(
     "--generate/--no-generate",
     "--generate-if-missing/--no-generate-if-missing",
+    "generate_if_missing",
     default=True,
     show_default=True,
     help=(
