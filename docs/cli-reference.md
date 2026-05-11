@@ -58,6 +58,12 @@ Treat `auth login-web` as one-time setup for a persistent browser profile. After
 `alphaxiv assistant ...` normally; the CLI will try to refresh the saved web token automatically
 from `ALPHAXIV_HOME/browser-profile`.
 
+`paper overview` will, by default, request overview generation when the public overview endpoint
+returns `404` (overview not generated yet) and then wait until it becomes available. Use
+`paper overview --no-generate` (or `--no-generate-if-missing`) to disable this behavior.
+
+This does not require Playwright, but it does require authentication (API key or `auth login-web`).
+
 If a user keeps rerunning `auth login-web`, check these first:
 
 - `ALPHAXIV_HOME` changes between runs

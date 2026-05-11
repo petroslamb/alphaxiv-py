@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .exceptions import APIError, AuthRequiredError
 from ._comments import CommentsAPI
 from ._core import DEFAULT_TIMEOUT, ClientCore
 from ._events import EventsAPI
@@ -10,6 +11,7 @@ from ._folders import FoldersAPI
 from ._papers import PapersAPI
 from ._search import SearchAPI
 from .assistant import AssistantAPI
+from .types import PaperOverview
 
 
 class AlphaXivClient:
@@ -102,3 +104,38 @@ class AlphaXivClient:
     @property
     def is_connected(self) -> bool:
         return self._core.is_open
+
+    async def get_or_generate_overview(
+        self,
+        identifier: str,
+        *,
+        language: str = "en",
+        wait_timeout: float = 300.0,
+    ) -> PaperOverview:
+        """Return the paper overview, or request generation when missing.
+
+        Notes:
+        - The overview endpoint is public, but generation requires authentication.
+        - This mirrors the web UI's "Generate Overview" flow and does NOT call Playwright.
+        """
+        try:
+            return await self.papers.overview(identifier, language=language)
+        except APIError as exc:
+            if exc.status_code != 404:
+                raise
+
+        if not self._core.authorization:
+            raise AuthRequiredError(
+                "Overview generation requires authentication. Set ALPHAXIV_API_KEY, run "
+                "'alphaxiv auth set-api-key' or 'alphaxiv auth login-web', or pass api_key/"
+                "authorization into AlphaXivClient(...)."
+            )
+
+        try:
+            await self.papers.request_overview_ai(identifier, preferred_language=language)
+        except APIError as exc:
+            # The UI returns 409 when the overview was already requested.
+            if exc.status_code != 409:
+                raise
+        await self.papers.wait_for_overview(identifier, timeout=wait_timeout)
+        return await self.papers.overview(identifier, language=language)

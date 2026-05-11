@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,7 @@ from .types import (
 )
 
 PODCASTS_BASE_URL = "https://paper-podcasts.alphaxiv.org"
+_ARXIV_VERSION_RE = re.compile(r"^(?P<bare>\d{4}\.\d{4,5})(?:v(?P<version>\d+))?$")
 
 
 class PapersAPI:
@@ -112,6 +115,97 @@ class PapersAPI:
         if not isinstance(payload, dict):
             raise ResolutionError(f"Unexpected overview status payload for '{identifier}'.")
         return OverviewStatus.from_payload(version_id=resolved.version_id, payload=payload)
+
+    async def request_overview_ai(
+        self,
+        identifier: str,
+        *,
+        preferred_language: str = "en",
+    ) -> dict[str, Any]:
+        """Request alphaXiv to generate an AI overview for the paper version.
+
+        This mirrors the web UI's "Generate Overview" button.
+        """
+        if not self._core.authorization:
+            raise AuthRequiredError("Overview generation requires authentication.")
+
+        normalized = normalize_identifier(identifier)
+        match = _ARXIV_VERSION_RE.fullmatch(normalized)
+        if not match:
+            resolved = await self.resolve(identifier)
+            normalized = resolved.canonical_id or resolved.versionless_id or normalized
+            match = _ARXIV_VERSION_RE.fullmatch(normalized)
+
+        if not match:
+            raise ResolutionError(
+                "Overview generation requires a bare or versioned arXiv id like 2605.02011 or "
+                "2605.02011v1."
+            )
+
+        bare = match.group("bare")
+        version_str = match.group("version")
+        if version_str is None:
+            legacy = await self._get_legacy_payload(bare)
+            paper = legacy.get("paper")
+            if not (isinstance(paper, dict) and isinstance(paper.get("max_version_order"), int)):
+                raise ResolutionError(
+                    f"Could not determine the latest arXiv version for '{identifier}'. "
+                    "Try passing an explicit version like 2604.02368v4."
+                )
+            version_num = int(paper["max_version_order"])
+        else:
+            try:
+                version_num = int(version_str)
+            except ValueError:
+                raise ResolutionError(f"Invalid arXiv version suffix in '{identifier}'.")
+
+        response = await self._core.request(
+            "POST",
+            f"{BASE_API_URL}/v2/papers/{bare}/versions/{version_num}/request-ai",
+            params={"preferredLanguage": preferred_language},
+            json_data={},
+        )
+        try:
+            payload = response.json()
+        except json.JSONDecodeError:
+            payload = {"raw": response.text}
+        return payload if isinstance(payload, dict) else {"payload": payload}
+
+    async def wait_for_overview(
+        self,
+        identifier: str,
+        *,
+        timeout: float = 300.0,
+        poll_interval: float = 2.0,
+    ) -> OverviewStatus:
+        """Poll overview status until it reaches a terminal state."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        last_status: OverviewStatus | None = None
+        last_state: str | None = None
+        last_url: str | None = None
+        pending_states = {"pending", "queued", "running", "processing", "extracting", "generating"}
+        while True:
+            try:
+                last_status = await self.overview_status(identifier)
+            except APIError as exc:
+                # Newly requested overviews can briefly return 404 until the backing record exists.
+                if exc.status_code != 404:
+                    raise
+                last_status = None
+                last_state = "pending"
+                last_url = exc.url or last_url
+            else:
+                last_url = f"{BASE_API_URL}/papers/v3/{last_status.version_id}/overview/status"
+                last_state = (last_status.state or "").strip().lower() or None
+                if last_state and last_state not in pending_states:
+                    return last_status
+            if loop.time() >= deadline:
+                message = "Overview generation did not complete before timeout."
+                if last_state:
+                    message = f"{message} Last state: {last_state}."
+                raise APIError(message, status_code=408, url=last_url)
+            await asyncio.sleep(poll_interval)
 
     async def full_text(self, identifier: str) -> PaperFullText:
         resolved = await self.resolve(identifier)

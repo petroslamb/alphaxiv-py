@@ -29,6 +29,7 @@ from .grouped import WrappedHelpGroup
 from .helpers import (
     console,
     get_effective_identifier,
+    make_authenticated_client,
     make_client,
     print_json,
     run_async_with_click_errors,
@@ -665,8 +666,24 @@ def show_summary(paper_id: str | None, language: str, raw: bool, json_output: bo
 @click.argument("paper_id", required=False)
 @click.option("--language", default="en", show_default=True, help="Overview language to request.")
 @click.option("--machine", is_flag=True, help="Print the raw machine-readable overview markdown.")
+@click.option(
+    "--generate/--no-generate",
+    "--generate-if-missing/--no-generate-if-missing",
+    default=True,
+    show_default=True,
+    help=(
+        "When enabled (default), if the overview does not exist yet, request generation through the "
+        "web-backed API and wait for it to become available."
+    ),
+)
 @click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
-def paper_overview(paper_id: str | None, language: str, machine: bool, json_output: bool) -> None:
+def paper_overview(
+    paper_id: str | None,
+    language: str,
+    machine: bool,
+    generate_if_missing: bool,
+    json_output: bool,
+) -> None:
     """Show the long AI overview for a paper in the selected language.
 
     Use this when the short summary is not enough and you want the full generated write-up.
@@ -682,7 +699,22 @@ def paper_overview(paper_id: str | None, language: str, machine: bool, json_outp
             ),
             see_help="alphaxiv paper overview --help",
         )
-    overview_obj = fetch_overview(identifier, language=language)
+    if generate_if_missing:
+        async def _get():
+            async with make_authenticated_client() as client:
+                return await client.get_or_generate_overview(identifier, language=language)
+
+        overview_obj = run_async_with_click_errors(
+            _get(),
+            suggestions=(
+                f"alphaxiv auth set-api-key",
+                f"alphaxiv auth login-web",
+                f"alphaxiv paper overview-status {identifier}",
+            ),
+            see_help="alphaxiv paper overview --help",
+        )
+    else:
+        overview_obj = fetch_overview(identifier, language=language)
     if machine:
         console.print(overview_obj.overview_markdown)
         return
