@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .exceptions import APIError, AuthRequiredError
 from ._comments import CommentsAPI
 from ._core import DEFAULT_TIMEOUT, ClientCore
 from ._events import EventsAPI
@@ -13,6 +12,7 @@ from ._folders import FoldersAPI
 from ._papers import PapersAPI
 from ._search import SearchAPI
 from .assistant import AssistantAPI
+from .exceptions import APIError, AuthRequiredError
 from .types import PaperOverview
 
 

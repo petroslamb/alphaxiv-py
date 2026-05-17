@@ -719,8 +719,8 @@ def paper_overview(
         overview_obj = run_async_with_click_errors(
             _get(),
             suggestions=(
-                f"alphaxiv auth set-api-key",
-                f"alphaxiv auth login-web",
+                "alphaxiv auth set-api-key",
+                "alphaxiv auth login-web",
                 f"alphaxiv paper overview-status {identifier}",
             ),
             see_help="alphaxiv paper overview --help",

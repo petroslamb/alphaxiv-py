@@ -156,8 +156,10 @@ class PapersAPI:
         else:
             try:
                 version_num = int(version_str)
-            except ValueError:
-                raise ResolutionError(f"Invalid arXiv version suffix in '{identifier}'.")
+            except ValueError as exc:
+                raise ResolutionError(
+                    f"Invalid arXiv version suffix in '{identifier}'."
+                ) from exc
 
         response = await self._core.request(
             "POST",
