@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from urllib.parse import urlparse
 
 from ._comments import CommentsAPI
 from ._core import DEFAULT_TIMEOUT, ClientCore
@@ -14,6 +15,13 @@ from ._search import SearchAPI
 from .assistant import AssistantAPI
 from .exceptions import APIError, AuthRequiredError
 from .types import PaperOverview
+
+
+def _is_missing_overview_response(exc: APIError) -> bool:
+    if exc.status_code != 404 or not exc.url:
+        return False
+    path = urlparse(exc.url).path.rstrip("/")
+    return "/papers/v3/" in path and "/overview/" in path and not path.endswith("/overview/status")
 
 
 class AlphaXivClient:
@@ -126,7 +134,7 @@ class AlphaXivClient:
         try:
             return await self.papers.overview(identifier, language=language)
         except APIError as exc:
-            if exc.status_code != 404:
+            if not _is_missing_overview_response(exc):
                 raise
 
         if on_missing is not None:

@@ -707,6 +707,31 @@ async def test_get_or_generate_overview_waits_through_transient_status_404(httpx
 
 
 @pytest.mark.asyncio
+async def test_get_or_generate_overview_preserves_resolution_404(monkeypatch) -> None:
+    resolution_error = APIError(
+        "Paper not found",
+        status_code=404,
+        url="https://api.alphaxiv.org/papers/v3/legacy/9999.99999",
+    )
+    missing_callback_called = False
+
+    async def overview(_identifier: str, language: str = "en") -> Any:
+        raise resolution_error
+
+    def on_missing() -> None:
+        nonlocal missing_callback_called
+        missing_callback_called = True
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        monkeypatch.setattr(client.papers, "overview", overview)
+        with pytest.raises(APIError) as exc:
+            await client.get_or_generate_overview("9999.99999", on_missing=on_missing)
+
+    assert exc.value is resolution_error
+    assert missing_callback_called is False
+
+
+@pytest.mark.asyncio
 async def test_wait_for_overview_errors_when_base_status_failed(httpx_mock) -> None:
     status_payload = cast(dict[str, Any], deepcopy(OVERVIEW_STATUS_PAYLOAD))
     status_payload["state"] = "failed"
