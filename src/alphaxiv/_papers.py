@@ -190,6 +190,7 @@ class PapersAPI:
         language: str = "en",
         timeout: float = 300.0,
         poll_interval: float = 2.0,
+        allow_missing_status: bool = False,
     ) -> OverviewStatus:
         """Poll overview status until it reaches a terminal state.
 
@@ -203,8 +204,6 @@ class PapersAPI:
         last_state: str | None = None
         last_url: str | None = None
         last_not_found_error: APIError | None = None
-        consecutive_not_found = 0
-        max_transient_not_found = 3
         pending_states = {"pending", "queued", "running", "processing", "extracting", "generating"}
         success_states = {"done", "complete", "completed", "ready", "success", "succeeded"}
         while True:
@@ -214,16 +213,14 @@ class PapersAPI:
                 # Newly requested overviews can briefly return 404 until the backing record exists.
                 if exc.status_code != 404:
                     raise
-                consecutive_not_found += 1
                 last_not_found_error = exc
-                if consecutive_not_found >= max_transient_not_found:
+                if not allow_missing_status:
                     raise
                 last_status = None
                 last_state = "pending"
                 last_url = exc.url or last_url
             else:
                 last_not_found_error = None
-                consecutive_not_found = 0
                 last_url = f"{BASE_API_URL}/papers/v3/{last_status.version_id}/overview/status"
                 last_state = (last_status.state or "").strip().lower() or None
                 if last_state and last_state not in pending_states:
