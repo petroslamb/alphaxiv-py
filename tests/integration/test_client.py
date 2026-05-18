@@ -478,6 +478,394 @@ async def test_overview_and_resources(httpx_mock) -> None:
 
 
 @pytest.mark.asyncio
+async def test_overview_normalizes_language(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/en",
+        json=OVERVIEW_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        overview = await client.papers.overview("2603.04379v1", language="EN")
+
+    assert overview.language == "en"
+    assert overview.summary is not None
+
+
+@pytest.mark.asyncio
+async def test_request_overview_ai_resolves_version_uuid(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b",
+        json=DIRECT_PAPER_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/v2/papers/2603.04379/versions/1/request-ai?preferredLanguage=en",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={},
+        json={"status": "queued"},
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        payload = await client.papers.request_overview_ai(
+            "019cbc05-f158-7e3a-b9c1-a43274c0130b",
+            preferred_language="EN",
+        )
+
+    assert payload == {"status": "queued"}
+
+
+@pytest.mark.asyncio
+async def test_request_overview_ai_uses_legacy_version_label_when_max_missing(
+    httpx_mock,
+) -> None:
+    legacy_payload = cast(dict[str, Any], deepcopy(LEGACY_PAYLOAD))
+    paper = cast(dict[str, Any], legacy_payload["paper"])
+    paper.pop("max_version_order", None)
+    paper_version = cast(dict[str, Any], paper["paper_version"])
+    paper_version.pop("version_order", None)
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379",
+        json=legacy_payload,
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/v2/papers/2603.04379/versions/1/request-ai?preferredLanguage=en",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={},
+        json={"status": "queued"},
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        payload = await client.papers.request_overview_ai(
+            "2603.04379",
+            preferred_language="EN",
+        )
+
+    assert payload == {"status": "queued"}
+
+
+@pytest.mark.asyncio
+async def test_request_overview_ai_bare_id_falls_back_to_direct_paper(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379",
+        status_code=404,
+        json={"error": {"message": "Paper not found"}},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/2603.04379",
+        json=DIRECT_PAPER_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/v2/papers/2603.04379/versions/1/request-ai?preferredLanguage=en",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={},
+        json={"status": "queued"},
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        payload = await client.papers.request_overview_ai(
+            "2603.04379",
+            preferred_language="EN",
+        )
+
+    assert payload == {"status": "queued"}
+
+
+@pytest.mark.asyncio
+async def test_wait_for_overview_normalizes_language(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=OVERVIEW_STATUS_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        status = await client.papers.wait_for_overview(
+            "2603.04379v1",
+            language="EN",
+            timeout=0,
+        )
+
+    assert status.state == "done"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_overview_preserves_status_404_by_default(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        status_code=404,
+        json={"error": {"message": "Overview status not found"}},
+    )
+
+    async with AlphaXivClient() as client:
+        with pytest.raises(APIError) as exc:
+            await client.papers.wait_for_overview(
+                "2603.04379v1",
+                timeout=300,
+                poll_interval=0,
+            )
+
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_wait_for_overview_can_poll_transient_status_404(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        status_code=404,
+        json={"error": {"message": "Overview status not found yet"}},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=OVERVIEW_STATUS_PAYLOAD,
+    )
+
+    async with AlphaXivClient() as client:
+        status = await client.papers.wait_for_overview(
+            "2603.04379v1",
+            timeout=300,
+            poll_interval=0,
+            allow_missing_status=True,
+        )
+
+    assert status.state == "done"
+
+
+@pytest.mark.asyncio
+async def test_get_or_generate_overview_waits_through_transient_status_404(httpx_mock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/en",
+        status_code=404,
+        json={"error": {"message": "Overview not found"}},
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/v2/papers/2603.04379/versions/1/request-ai?preferredLanguage=en",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={},
+        json={"status": "queued"},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        status_code=404,
+        json={"error": {"message": "Overview status not found yet"}},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=OVERVIEW_STATUS_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/en",
+        json=OVERVIEW_PAYLOAD,
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        overview = await client.get_or_generate_overview(
+            "2603.04379v1",
+            wait_timeout=300,
+        )
+
+    assert overview.overview_markdown.startswith("## Problem")
+
+
+@pytest.mark.asyncio
+async def test_get_or_generate_overview_waits_for_translation_status_to_appear(
+    httpx_mock,
+) -> None:
+    missing_translation_status = cast(dict[str, Any], deepcopy(OVERVIEW_STATUS_PAYLOAD))
+    translations = cast(dict[str, Any], missing_translation_status["translations"])
+    missing_translation_status["translations"] = {"en": translations["en"]}
+
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/fr",
+        status_code=404,
+        json={"error": {"message": "Overview not found"}},
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/v2/papers/2603.04379/versions/1/request-ai?preferredLanguage=fr",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={},
+        json={"status": "queued"},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=missing_translation_status,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=OVERVIEW_STATUS_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/fr",
+        json=OVERVIEW_PAYLOAD,
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        overview = await client.get_or_generate_overview(
+            "2603.04379v1",
+            language="fr",
+            wait_timeout=300,
+        )
+
+    assert overview.overview_markdown.startswith("## Problem")
+
+
+@pytest.mark.asyncio
+async def test_get_or_generate_overview_preserves_resolution_404(monkeypatch) -> None:
+    resolution_error = APIError(
+        "Paper not found",
+        status_code=404,
+        url="https://api.alphaxiv.org/papers/v3/legacy/9999.99999",
+    )
+    missing_callback_called = False
+
+    async def overview(_identifier: str, language: str = "en") -> Any:
+        raise resolution_error
+
+    def on_missing() -> None:
+        nonlocal missing_callback_called
+        missing_callback_called = True
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        monkeypatch.setattr(client.papers, "overview", overview)
+        with pytest.raises(APIError) as exc:
+            await client.get_or_generate_overview("9999.99999", on_missing=on_missing)
+
+    assert exc.value is resolution_error
+    assert missing_callback_called is False
+
+
+@pytest.mark.asyncio
+async def test_wait_for_overview_errors_when_base_status_failed(httpx_mock) -> None:
+    status_payload = cast(dict[str, Any], deepcopy(OVERVIEW_STATUS_PAYLOAD))
+    status_payload["state"] = "failed"
+    status_payload["error"] = "Generation failed"
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=status_payload,
+    )
+
+    async with AlphaXivClient() as client:
+        with pytest.raises(APIError, match="Overview generation failed") as exc:
+            await client.papers.wait_for_overview(
+                "2603.04379v1",
+                timeout=300,
+            )
+
+    assert exc.value.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_wait_for_overview_errors_when_translation_status_missing(httpx_mock) -> None:
+    status_payload = cast(dict[str, Any], deepcopy(OVERVIEW_STATUS_PAYLOAD))
+    translations = cast(dict[str, Any], status_payload["translations"])
+    status_payload["translations"] = {"en": translations["en"]}
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=status_payload,
+    )
+
+    async with AlphaXivClient() as client:
+        with pytest.raises(APIError, match="Overview translation for 'fr' was not queued") as exc:
+            await client.papers.wait_for_overview(
+                "2603.04379v1",
+                language="fr",
+                timeout=300,
+            )
+
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_wait_for_overview_errors_when_translation_status_failed(httpx_mock) -> None:
+    status_payload = cast(dict[str, Any], deepcopy(OVERVIEW_STATUS_PAYLOAD))
+    translations = cast(dict[str, Any], status_payload["translations"])
+    fr_translation = cast(dict[str, Any], translations["fr"])
+    fr_translation["state"] = "failed"
+    fr_translation["error"] = None
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=status_payload,
+    )
+
+    async with AlphaXivClient() as client:
+        with pytest.raises(APIError, match="Overview translation failed") as exc:
+            await client.papers.wait_for_overview(
+                "2603.04379v1",
+                language="fr",
+                timeout=300,
+            )
+
+    assert exc.value.status_code == 502
+
+
+@pytest.mark.asyncio
 async def test_paper_comments(httpx_mock) -> None:
     comments_legacy_payload = cast(dict[str, Any], deepcopy(LEGACY_PAYLOAD))
     paper_payload = cast(dict[str, Any], comments_legacy_payload["paper"])

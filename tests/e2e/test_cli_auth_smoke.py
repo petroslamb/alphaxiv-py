@@ -57,6 +57,25 @@ def test_cli_auth_status_and_assistant_reads_smoke(
     assert "sessions" in sessions_payload
 
 
+def test_cli_auth_paper_overview_default_smoke(
+    cli_runner,
+    isolated_cli_env: dict[str, str],
+) -> None:
+    api_key = require_live_auth_smoke()
+    seed_saved_api_key(cli_runner, isolated_cli_env, api_key)
+
+    overview_json = invoke_cli(
+        cli_runner,
+        ["paper", "overview", SMOKE_PAPER_ID, "--json"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(overview_json, "paper", "overview", SMOKE_PAPER_ID, "--json")
+    overview_payload = json.loads(overview_json.output)
+    assert overview_payload["requested_id"] == SMOKE_PAPER_ID
+    assert overview_payload["version_id"]
+    assert overview_payload["overview_markdown"]
+
+
 def test_cli_auth_folders_list_smoke(
     cli_runner,
     isolated_cli_env: dict[str, str],

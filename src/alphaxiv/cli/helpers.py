@@ -66,6 +66,14 @@ def make_assistant_client() -> AlphaXivClient:
     return make_client()
 
 
+def make_authenticated_client() -> AlphaXivClient:
+    """Create a client that prefers browser-backed auth and falls back to an API key.
+
+    Use this for non-assistant authenticated endpoints (writes, generation requests, etc).
+    """
+    return make_assistant_client()
+
+
 def load_context() -> ResolvedPaper | None:
     """Load the current paper context from disk."""
     path = get_context_path()

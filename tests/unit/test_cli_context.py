@@ -361,7 +361,7 @@ def test_overview_uses_current_context(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(paper_cli, "fetch_overview", lambda _identifier, language="en": overview)
 
-    result = runner.invoke(cli, ["paper", "overview"])
+    result = runner.invoke(cli, ["paper", "overview", "--no-generate"])
     assert result.exit_code == 0
     assert "Helios" in result.output
     assert "Fast video generation" in result.output

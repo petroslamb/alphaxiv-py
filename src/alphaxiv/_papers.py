@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,11 @@ from .types import (
 )
 
 PODCASTS_BASE_URL = "https://paper-podcasts.alphaxiv.org"
+_ARXIV_VERSION_RE = re.compile(r"^(?P<bare>\d{4}\.\d{4,5})(?:v(?P<version>\d+))?$")
+
+
+def _normalize_overview_language(language: str) -> str:
+    return language.strip().lower() or "en"
 
 
 class PapersAPI:
@@ -88,6 +95,7 @@ class PapersAPI:
         return Paper.from_payload(resolved, payload)
 
     async def overview(self, identifier: str, language: str = "en") -> PaperOverview:
+        language = _normalize_overview_language(language)
         resolved = await self.resolve(identifier)
         if not resolved.version_id:
             raise ResolutionError(f"Could not determine a paper version UUID for '{identifier}'.")
@@ -112,6 +120,158 @@ class PapersAPI:
         if not isinstance(payload, dict):
             raise ResolutionError(f"Unexpected overview status payload for '{identifier}'.")
         return OverviewStatus.from_payload(version_id=resolved.version_id, payload=payload)
+
+    async def request_overview_ai(
+        self,
+        identifier: str,
+        *,
+        preferred_language: str = "en",
+    ) -> dict[str, Any]:
+        """Request alphaXiv to generate an AI overview for the paper version.
+
+        This mirrors the web UI's "Generate Overview" button.
+        """
+        if not self._core.authorization:
+            raise AuthRequiredError("Overview generation requires authentication.")
+
+        preferred_language = _normalize_overview_language(preferred_language)
+        normalized = normalize_identifier(identifier)
+        match = _ARXIV_VERSION_RE.fullmatch(normalized)
+        if not match:
+            if is_paper_version_uuid(normalized):
+                resolved = await self._resolve_direct(identifier, normalized)
+                self._cache_resolution(normalized, resolved)
+            else:
+                resolved = await self.resolve(identifier)
+            normalized = resolved.canonical_id or resolved.versionless_id or normalized
+            match = _ARXIV_VERSION_RE.fullmatch(normalized)
+
+        if not match:
+            raise ResolutionError(
+                "Overview generation requires a bare or versioned arXiv id like 2605.02011 or "
+                "2605.02011v1."
+            )
+
+        bare = match.group("bare")
+        version_str = match.group("version")
+        if version_str is None:
+            legacy = await self._get_legacy_or_direct_payload(identifier, bare)
+            paper = legacy.get("paper")
+            version_num = self._version_number_from_legacy_paper(paper)
+            if version_num is None:
+                raise ResolutionError(
+                    f"Could not determine the latest arXiv version for '{identifier}'. "
+                    "Try passing an explicit version like 2604.02368v4."
+                )
+        else:
+            try:
+                version_num = int(version_str)
+            except ValueError as exc:
+                raise ResolutionError(f"Invalid arXiv version suffix in '{identifier}'.") from exc
+
+        response = await self._core.request(
+            "POST",
+            f"{BASE_API_URL}/v2/papers/{bare}/versions/{version_num}/request-ai",
+            params={"preferredLanguage": preferred_language},
+            json_data={},
+        )
+        try:
+            payload = response.json()
+        except json.JSONDecodeError:
+            payload = {"raw": response.text}
+        return payload if isinstance(payload, dict) else {"payload": payload}
+
+    async def wait_for_overview(
+        self,
+        identifier: str,
+        *,
+        language: str = "en",
+        timeout: float = 300.0,
+        poll_interval: float = 2.0,
+        allow_missing_status: bool = False,
+        allow_missing_translation: bool = False,
+    ) -> OverviewStatus:
+        """Poll overview status until it reaches a terminal state.
+
+        If ``language`` is not the default, waits for the corresponding translation status to
+        reach a terminal state as well.
+        """
+        language = _normalize_overview_language(language)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        last_status: OverviewStatus | None = None
+        last_state: str | None = None
+        last_url: str | None = None
+        last_not_found_error: APIError | None = None
+        last_missing_translation_error: APIError | None = None
+        pending_states = {"pending", "queued", "running", "processing", "extracting", "generating"}
+        success_states = {"done", "complete", "completed", "ready", "success", "succeeded"}
+        while True:
+            try:
+                last_status = await self.overview_status(identifier)
+            except APIError as exc:
+                # Newly requested overviews can briefly return 404 until the backing record exists.
+                if exc.status_code != 404:
+                    raise
+                last_not_found_error = exc
+                if not allow_missing_status:
+                    raise
+                last_status = None
+                last_state = "pending"
+                last_url = exc.url or last_url
+            else:
+                last_not_found_error = None
+                last_url = f"{BASE_API_URL}/papers/v3/{last_status.version_id}/overview/status"
+                last_state = (last_status.state or "").strip().lower() or None
+                if last_state and last_state not in pending_states:
+                    if last_state not in success_states:
+                        error = last_status.raw.get("error")
+                        message = f"Overview generation failed with state '{last_state}'."
+                        if error:
+                            message = f"{message} Error: {error}"
+                        raise APIError(message, status_code=502, url=last_url)
+                    if language == "en":
+                        last_missing_translation_error = None
+                        return last_status
+                    translation = last_status.translations.get(language)
+                    if translation is None:
+                        last_missing_translation_error = APIError(
+                            f"Overview translation for '{language}' was not queued after base "
+                            f"overview reached {last_state}.",
+                            status_code=404,
+                            url=last_url,
+                        )
+                        if not allow_missing_translation:
+                            raise last_missing_translation_error
+                        last_state = f"{language} translation missing"
+                    else:
+                        last_missing_translation_error = None
+                        translation_state = (translation.state or "").strip().lower() or None
+                        if translation_state and translation_state not in pending_states:
+                            if translation_state not in success_states:
+                                message = (
+                                    f"Overview translation failed with state '{translation_state}'."
+                                )
+                                if translation.error:
+                                    message = f"{message} Error: {translation.error}"
+                                raise APIError(message, status_code=502, url=last_url)
+                            if translation.error:
+                                raise APIError(
+                                    f"Overview translation failed: {translation.error}",
+                                    status_code=502,
+                                    url=last_url,
+                                )
+                            return last_status
+            if loop.time() >= deadline:
+                if last_not_found_error is not None:
+                    raise last_not_found_error
+                if last_missing_translation_error is not None:
+                    raise last_missing_translation_error
+                message = "Overview generation did not complete before timeout."
+                if last_state:
+                    message = f"{message} Last state: {last_state}."
+                raise APIError(message, status_code=408, url=last_url)
+            await asyncio.sleep(poll_interval)
 
     async def full_text(self, identifier: str) -> PaperFullText:
         resolved = await self.resolve(identifier)
@@ -419,6 +579,35 @@ class PapersAPI:
         if not canonical_id or "v" not in canonical_id:
             return None
         return f"v{canonical_id.rsplit('v', 1)[1]}"
+
+    def _version_number_from_legacy_paper(self, paper: Any) -> int | None:
+        if not isinstance(paper, dict):
+            return None
+
+        max_version_order = self._positive_int(paper.get("max_version_order"))
+        if max_version_order is not None:
+            return max_version_order
+
+        version = paper.get("paper_version") or {}
+        if not isinstance(version, dict):
+            return None
+
+        version_order = self._positive_int(version.get("version_order"))
+        if version_order is not None:
+            return version_order
+
+        version_label = version.get("version_label")
+        if not isinstance(version_label, str):
+            return None
+        match = re.fullmatch(r"v(?P<version>\d+)", version_label.strip())
+        if not match:
+            return None
+        return int(match.group("version"))
+
+    def _positive_int(self, value: Any) -> int | None:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            return None
+        return value
 
     def _resolved_from_legacy(self, input_id: str, payload: dict[str, Any]) -> ResolvedPaper:
         paper = payload.get("paper") or {}

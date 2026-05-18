@@ -29,6 +29,7 @@ from .grouped import WrappedHelpGroup
 from .helpers import (
     console,
     get_effective_identifier,
+    make_authenticated_client,
     make_client,
     print_json,
     run_async_with_click_errors,
@@ -107,6 +108,12 @@ def fetch_paper(identifier: str) -> Paper:
             return await client.papers.get(identifier)
 
     return run_async_with_click_errors(_get(), see_help="alphaxiv paper --help")
+
+
+def notify_overview_missing_for_generate(identifier: str, language: str) -> None:
+    """Print notices when generate mode finds no overview yet."""
+    click.echo(f"No overview found for {identifier} (language: {language}).", err=True)
+    click.echo("Requesting overview generation...", err=True)
 
 
 def fetch_overview(identifier: str, language: str = "en") -> PaperOverview:
@@ -665,8 +672,22 @@ def show_summary(paper_id: str | None, language: str, raw: bool, json_output: bo
 @click.argument("paper_id", required=False)
 @click.option("--language", default="en", show_default=True, help="Overview language to request.")
 @click.option("--machine", is_flag=True, help="Print the raw machine-readable overview markdown.")
+@click.option(
+    "--generate/--no-generate",
+    "--generate-if-missing/--no-generate-if-missing",
+    "generate_if_missing",
+    default=True,
+    show_default=True,
+    help="Request and wait for overview generation when missing.",
+)
 @click.option("--json", "json_output", is_flag=True, help="Print normalized machine-readable JSON.")
-def paper_overview(paper_id: str | None, language: str, machine: bool, json_output: bool) -> None:
+def paper_overview(
+    paper_id: str | None,
+    language: str,
+    machine: bool,
+    generate_if_missing: bool,
+    json_output: bool,
+) -> None:
     """Show the long AI overview for a paper in the selected language.
 
     Use this when the short summary is not enough and you want the full generated write-up.
@@ -682,7 +703,31 @@ def paper_overview(paper_id: str | None, language: str, machine: bool, json_outp
             ),
             see_help="alphaxiv paper overview --help",
         )
-    overview_obj = fetch_overview(identifier, language=language)
+    show_notices = not machine and not json_output
+    if generate_if_missing:
+
+        def _on_missing() -> None:
+            notify_overview_missing_for_generate(identifier, language)
+
+        async def _get():
+            async with make_authenticated_client() as client:
+                return await client.get_or_generate_overview(
+                    identifier,
+                    language=language,
+                    on_missing=_on_missing if show_notices else None,
+                )
+
+        overview_obj = run_async_with_click_errors(
+            _get(),
+            suggestions=(
+                "alphaxiv auth set-api-key",
+                "alphaxiv auth login-web",
+                f"alphaxiv paper overview-status {identifier}",
+            ),
+            see_help="alphaxiv paper overview --help",
+        )
+    else:
+        overview_obj = fetch_overview(identifier, language=language)
     if machine:
         console.print(overview_obj.overview_markdown)
         return

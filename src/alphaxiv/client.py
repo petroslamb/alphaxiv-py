@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from urllib.parse import urlparse
+
 from ._comments import CommentsAPI
 from ._core import DEFAULT_TIMEOUT, ClientCore
 from ._events import EventsAPI
@@ -10,6 +13,15 @@ from ._folders import FoldersAPI
 from ._papers import PapersAPI
 from ._search import SearchAPI
 from .assistant import AssistantAPI
+from .exceptions import APIError, AuthRequiredError
+from .types import PaperOverview
+
+
+def _is_missing_overview_response(exc: APIError) -> bool:
+    if exc.status_code != 404 or not exc.url:
+        return False
+    path = urlparse(exc.url).path.rstrip("/")
+    return "/papers/v3/" in path and "/overview/" in path and not path.endswith("/overview/status")
 
 
 class AlphaXivClient:
@@ -102,3 +114,50 @@ class AlphaXivClient:
     @property
     def is_connected(self) -> bool:
         return self._core.is_open
+
+    async def get_or_generate_overview(
+        self,
+        identifier: str,
+        *,
+        language: str = "en",
+        wait_timeout: float = 300.0,
+        on_missing: Callable[[], None] | None = None,
+    ) -> PaperOverview:
+        """Return the paper overview, or request generation when missing.
+
+        Notes:
+        - The overview endpoint is public, but generation requires authentication.
+        - This mirrors the web UI's "Generate Overview" flow and does NOT call Playwright.
+        - ``on_missing`` is invoked when the overview endpoint returns 404, before any
+          authentication check or generation request.
+        """
+        try:
+            return await self.papers.overview(identifier, language=language)
+        except APIError as exc:
+            if not _is_missing_overview_response(exc):
+                raise
+
+        if on_missing is not None:
+            on_missing()
+
+        if not self._core.authorization:
+            raise AuthRequiredError(
+                "Overview generation requires authentication. Set ALPHAXIV_API_KEY, run "
+                "'alphaxiv auth set-api-key' or 'alphaxiv auth login-web', or pass api_key/"
+                "authorization into AlphaXivClient(...)."
+            )
+
+        try:
+            await self.papers.request_overview_ai(identifier, preferred_language=language)
+        except APIError as exc:
+            # The UI returns 409 when the overview was already requested.
+            if exc.status_code != 409:
+                raise
+        await self.papers.wait_for_overview(
+            identifier,
+            language=language,
+            timeout=wait_timeout,
+            allow_missing_status=True,
+            allow_missing_translation=True,
+        )
+        return await self.papers.overview(identifier, language=language)

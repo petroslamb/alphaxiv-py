@@ -59,6 +59,7 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/papers/v3/{identifier}/preview` | public | Compact public paper preview metadata. | yes |
 | `GET` | `/papers/v3/{paperGroupId}/figures` | public | Figure asset paths for a paper group. | yes |
 | `POST` | `/papers/v2/{paperVersionId}/comment` | auth write | Creates a top-level paper comment or a reply when `parentCommentId` is set. | yes |
+| `POST` | `/v2/papers/{arxivId}/versions/{n}/request-ai?preferredLanguage=...` | auth write | Requests generation of the AI overview/blog for the specified arXiv version. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/full-text` | public | Page-level extracted paper text. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/{lang}` | public | AI overview or blog payload for a paper version. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/status` | public | Overview generation and translation status. | yes |
