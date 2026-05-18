@@ -189,6 +189,7 @@ class PapersAPI:
         timeout: float = 300.0,
         poll_interval: float = 2.0,
         allow_missing_status: bool = False,
+        allow_missing_translation: bool = False,
     ) -> OverviewStatus:
         """Poll overview status until it reaches a terminal state.
 
@@ -202,6 +203,7 @@ class PapersAPI:
         last_state: str | None = None
         last_url: str | None = None
         last_not_found_error: APIError | None = None
+        last_missing_translation_error: APIError | None = None
         pending_states = {"pending", "queued", "running", "processing", "extracting", "generating"}
         success_states = {"done", "complete", "completed", "ready", "success", "succeeded"}
         while True:
@@ -229,16 +231,21 @@ class PapersAPI:
                             message = f"{message} Error: {error}"
                         raise APIError(message, status_code=502, url=last_url)
                     if language == "en":
+                        last_missing_translation_error = None
                         return last_status
                     translation = last_status.translations.get(language)
                     if translation is None:
-                        raise APIError(
+                        last_missing_translation_error = APIError(
                             f"Overview translation for '{language}' was not queued after base "
                             f"overview reached {last_state}.",
                             status_code=404,
                             url=last_url,
                         )
+                        if not allow_missing_translation:
+                            raise last_missing_translation_error
+                        last_state = f"{language} translation missing"
                     else:
+                        last_missing_translation_error = None
                         translation_state = (translation.state or "").strip().lower() or None
                         if translation_state and translation_state not in pending_states:
                             if translation_state not in success_states:
@@ -258,6 +265,8 @@ class PapersAPI:
             if loop.time() >= deadline:
                 if last_not_found_error is not None:
                     raise last_not_found_error
+                if last_missing_translation_error is not None:
+                    raise last_missing_translation_error
                 message = "Overview generation did not complete before timeout."
                 if last_state:
                     message = f"{message} Last state: {last_state}."

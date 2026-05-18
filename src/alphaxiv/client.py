@@ -158,5 +158,6 @@ class AlphaXivClient:
             language=language,
             timeout=wait_timeout,
             allow_missing_status=True,
+            allow_missing_translation=True,
         )
         return await self.papers.overview(identifier, language=language)

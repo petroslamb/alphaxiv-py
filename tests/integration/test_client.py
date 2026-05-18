@@ -707,6 +707,58 @@ async def test_get_or_generate_overview_waits_through_transient_status_404(httpx
 
 
 @pytest.mark.asyncio
+async def test_get_or_generate_overview_waits_for_translation_status_to_appear(
+    httpx_mock,
+) -> None:
+    missing_translation_status = cast(dict[str, Any], deepcopy(OVERVIEW_STATUS_PAYLOAD))
+    translations = cast(dict[str, Any], missing_translation_status["translations"])
+    missing_translation_status["translations"] = {"en": translations["en"]}
+
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/legacy/2603.04379v1",
+        json=LEGACY_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/fr",
+        status_code=404,
+        json={"error": {"message": "Overview not found"}},
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.alphaxiv.org/v2/papers/2603.04379/versions/1/request-ai?preferredLanguage=fr",
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        match_json={},
+        json={"status": "queued"},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=missing_translation_status,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/status",
+        json=OVERVIEW_STATUS_PAYLOAD,
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/papers/v3/019cbc05-f158-7e3a-b9c1-a43274c0130b/overview/fr",
+        json=OVERVIEW_PAYLOAD,
+    )
+
+    async with AlphaXivClient(api_key="axv1_test-token") as client:
+        overview = await client.get_or_generate_overview(
+            "2603.04379v1",
+            language="fr",
+            wait_timeout=300,
+        )
+
+    assert overview.overview_markdown.startswith("## Problem")
+
+
+@pytest.mark.asyncio
 async def test_get_or_generate_overview_preserves_resolution_404(monkeypatch) -> None:
     resolution_error = APIError(
         "Paper not found",
