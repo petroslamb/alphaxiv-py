@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.0 - 2026-05-18
+
+- Added authenticated overview generation fallback for `alphaxiv paper overview`
+  and `AlphaXivClient.get_or_generate_overview(...)`, including `--no-generate`
+  controls for read-only CLI behavior.
+- Added SDK support for requesting AI overview generation and polling overview
+  status through transient missing status or translation records after a
+  successful generation request.
+- Preserved actionable errors for unknown papers, failed overview jobs, failed
+  translations, and permanent missing status records.
+- Updated the paper reads/resources feature spec to document the generation
+  endpoint, auth boundary, polling behavior, and smoke coverage.
+
 ## 0.5.0 - 2026-05-10
 
 - Added a repo-local spec system under `specs/` with `scripts/check_specs.py`
