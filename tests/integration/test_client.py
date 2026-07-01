@@ -30,7 +30,6 @@ from tests.fixtures import (
     OVERVIEW_PAYLOAD,
     OVERVIEW_STATUS_PAYLOAD,
     PAPER_VIEW_RESPONSE,
-    PAPER_VOTE_RESPONSE,
     PREVIEW_PAYLOAD,
     RICH_PAPER_SEARCH_PAYLOAD,
     SEARCH_PAYLOAD,
@@ -44,6 +43,7 @@ from alphaxiv import AlphaXivClient
 from alphaxiv.auth import (
     build_saved_api_key,
     build_saved_browser_auth,
+    build_saved_browser_cookie_auth,
     save_api_key,
     save_browser_auth,
 )
@@ -144,6 +144,28 @@ async def test_from_saved_browser_auth_sends_authorization_header(
         method="GET",
         url="https://api.alphaxiv.org/search/v2/paper/fast?q=helios&includePrivate=false",
         match_headers={"Authorization": "Bearer browser-session-token"},
+        json=SEARCH_PAYLOAD,
+    )
+
+    async with AlphaXivClient.from_saved_browser_auth() as client:
+        results = await client.search.papers("helios")
+
+    assert len(results) == 1
+    assert results[0].paper_id == "2603.04379"
+
+
+@pytest.mark.asyncio
+async def test_from_saved_browser_cookie_auth_sends_cookie_header(
+    httpx_mock, monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_browser_auth(
+        build_saved_browser_cookie_auth("__Secure-alphaxiv_auth.session_token=secret")
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.alphaxiv.org/search/v2/paper/fast?q=helios&includePrivate=false",
+        match_headers={"Cookie": "__Secure-alphaxiv_auth.session_token=secret"},
         json=SEARCH_PAYLOAD,
     )
 
@@ -925,6 +947,11 @@ async def test_create_comment(httpx_mock) -> None:
             "title": "Useful note",
             "tag": "general",
             "parentCommentId": None,
+            "anchorPosition": None,
+            "focusPosition": None,
+            "highlightRects": None,
+            "selectedText": None,
+            "highlightColor": None,
         },
         json=COMMENT_CREATE_RESPONSE,
     )
@@ -968,6 +995,11 @@ async def test_reply_to_comment(httpx_mock) -> None:
             "title": None,
             "tag": "research",
             "parentCommentId": "comment-root",
+            "anchorPosition": None,
+            "focusPosition": None,
+            "highlightRects": None,
+            "selectedText": None,
+            "highlightColor": None,
         },
         json=COMMENT_REPLY_RESPONSE,
     )
@@ -1009,6 +1041,11 @@ async def test_create_comment_with_version_uuid(httpx_mock) -> None:
             "title": None,
             "tag": "general",
             "parentCommentId": None,
+            "anchorPosition": None,
+            "focusPosition": None,
+            "highlightRects": None,
+            "selectedText": None,
+            "highlightColor": None,
         },
         json=COMMENT_CREATE_RESPONSE,
     )
@@ -1140,16 +1177,25 @@ async def test_paper_toggle_vote(httpx_mock) -> None:
         json=LEGACY_PAYLOAD,
     )
     httpx_mock.add_response(
-        method="POST",
-        url="https://api.alphaxiv.org/v2/papers/019cbc05-f11c-75c7-a13b-b028107d6a76/vote",
+        method="GET",
+        url="https://api.alphaxiv.org/users/v3",
         match_headers={"Authorization": "Bearer axv1_test-token"},
-        json=PAPER_VOTE_RESPONSE,
+        json={"user": {"votedPaperGroups": []}},
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url=(
+            "https://api.alphaxiv.org/papers/v3/"
+            "019cbc05-f11c-75c7-a13b-b028107d6a76/like?liked=true"
+        ),
+        match_headers={"Authorization": "Bearer axv1_test-token"},
+        json={"liked": True},
     )
 
     async with AlphaXivClient(api_key="axv1_test-token") as client:
         response = await client.papers.toggle_vote("2603.04379v1")
 
-    assert response == PAPER_VOTE_RESPONSE
+    assert response == {"liked": True}
 
 
 @pytest.mark.asyncio

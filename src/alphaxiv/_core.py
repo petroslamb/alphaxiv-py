@@ -7,6 +7,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -27,11 +28,13 @@ class ClientCore:
         self,
         *,
         authorization: str | None = None,
+        cookie_header: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
         retries: int = DEFAULT_RETRIES,
     ) -> None:
         self.authorization = authorization
+        self.cookie_header = cookie_header
         self._timeout = timeout
         self._connect_timeout = connect_timeout
         self._retries = retries
@@ -46,10 +49,7 @@ class ClientCore:
             write=self._timeout,
             pool=self._timeout,
         )
-        headers = {"User-Agent": USER_AGENT}
-        if self.authorization:
-            headers["Authorization"] = self.authorization
-        self._http_client = httpx.AsyncClient(timeout=timeout, headers=headers)
+        self._http_client = httpx.AsyncClient(timeout=timeout, headers={"User-Agent": USER_AGENT})
 
     async def close(self) -> None:
         if self._http_client is None:
@@ -61,10 +61,29 @@ class ClientCore:
     def is_open(self) -> bool:
         return self._http_client is not None
 
+    @property
+    def has_auth(self) -> bool:
+        return bool(self.authorization or self.cookie_header)
+
     def _client(self) -> httpx.AsyncClient:
         if self._http_client is None:
             raise RuntimeError("Client not initialized. Use 'async with AlphaXivClient()'.")
         return self._http_client
+
+    def _headers_for_url(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, str] | None:
+        merged: dict[str, str] = {}
+        if urlparse(url).hostname == urlparse(BASE_API_URL).hostname:
+            if self.authorization:
+                merged["Authorization"] = self.authorization
+            if self.cookie_header:
+                merged["Cookie"] = self.cookie_header
+        if headers:
+            merged.update(headers)
+        return merged or None
 
     def _build_api_error(self, *, method: str, response: httpx.Response, text: str) -> APIError:
         message = f"{method} {response.request.url} failed with HTTP {response.status_code}"
@@ -103,7 +122,7 @@ class ClientCore:
                     method,
                     url,
                     params=params,
-                    headers=headers,
+                    headers=self._headers_for_url(url, headers),
                     follow_redirects=follow_redirects,
                     json=json_data,
                 )
@@ -147,7 +166,7 @@ class ClientCore:
             method,
             url,
             params=params,
-            headers=headers,
+            headers=self._headers_for_url(url, headers),
             follow_redirects=follow_redirects,
             json=json_data,
         ) as response:

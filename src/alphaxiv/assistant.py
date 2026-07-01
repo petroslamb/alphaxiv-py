@@ -209,7 +209,7 @@ class AssistantAPI:
         )
 
     def _require_auth(self) -> None:
-        if not self._core.authorization:
+        if not self._core.has_auth:
             raise AuthRequiredError(ASSISTANT_AUTH_REQUIRED_MESSAGE)
 
     async def _resolve_paper(self, paper_id: str | None) -> ResolvedPaper | None:

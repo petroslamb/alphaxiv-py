@@ -1,6 +1,6 @@
 # API Inventory
 
-Last verified: May 9, 2026
+Last verified: July 2, 2026
 
 This is a confirmed inventory of alphaXiv endpoints observed from live traffic and direct probing. It is not an official contract, and alphaXiv does not appear to publish public API docs or an OpenAPI schema.
 
@@ -23,9 +23,13 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 ## Base Hosts
 
 - `https://api.alphaxiv.org`: primary JSON and SSE API
-- `https://fetcher.alphaxiv.org`: PDF fetch URLs
+- `https://pdfs.assets.alphaxiv.org`: PDF asset URLs used by the current paper UI
 - `https://paper-podcasts.alphaxiv.org`: podcast audio and transcript assets
-- `https://clerk.alphaxiv.org`: Clerk auth endpoints used by the web app
+- `https://www.alphaxiv.org`: web app and browser-login origin. Current web auth uses Better Auth
+  session cookies, which the CLI can save from the persistent Playwright profile.
+
+Authenticated `api.alphaxiv.org` requests can use either API-key bearer auth or the browser-backed
+alphaXiv session cookie saved by `alphaxiv auth login-web`.
 
 ## Confirmed Endpoints
 
@@ -58,7 +62,7 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 | `GET` | `/papers/v3/{identifier}` | public | Direct paper-version payload for public arXiv IDs and paper-version UUIDs; used as the fallback route for alphaXiv direct identifiers. | yes |
 | `GET` | `/papers/v3/{identifier}/preview` | public | Compact public paper preview metadata. | yes |
 | `GET` | `/papers/v3/{paperGroupId}/figures` | public | Figure asset paths for a paper group. | yes |
-| `POST` | `/papers/v2/{paperVersionId}/comment` | auth write | Creates a top-level paper comment or a reply when `parentCommentId` is set. | yes |
+| `POST` | `/papers/v2/{paperVersionId}/comment` | auth write | Creates a top-level paper comment or a reply when `parentCommentId` is set. Current web payload includes nullable annotation fields such as `anchorPosition`, `focusPosition`, `highlightRects`, `selectedText`, and `highlightColor`. | yes |
 | `POST` | `/v2/papers/{arxivId}/versions/{n}/request-ai?preferredLanguage=...` | auth write | Requests generation of the AI overview/blog for the specified arXiv version. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/full-text` | public | Page-level extracted paper text. | yes |
 | `GET` | `/papers/v3/{paperVersionId}/overview/{lang}` | public | AI overview or blog payload for a paper version. | yes |
@@ -93,7 +97,7 @@ These common documentation paths were probed on `https://api.alphaxiv.org` and r
 
 | Method | Path | Access | Description | Used by alphaxiv-py |
 | --- | --- | --- | --- | --- |
-| `POST` | `/v2/papers/{paperId}/vote` | auth write | Toggles a paper like or vote. | yes |
+| `POST` | `/papers/v3/{paperGroupId}/like?liked={true|false}` | auth write | Sets the authenticated paper like state. SDK toggle support reads `/users/v3` `votedPaperGroups` first, then sends the inverted state. | yes |
 | `POST` | `/comments/v2/{commentId}/upvote` | auth write | Toggles a comment upvote. | yes |
 | `DELETE` | `/comments/v2/{commentId}` | auth write | Deletes a comment by id. | yes |
 
@@ -103,11 +107,9 @@ These are not under `api.alphaxiv.org`, but they are part of the product surface
 
 | Method | URL Pattern | Description | Used by alphaxiv-py |
 | --- | --- | --- | --- |
-| `GET` | `https://fetcher.alphaxiv.org/v2/pdf/{canonical_id}.pdf` | PDF download URL used by the paper UI. | yes |
+| `GET` | `https://pdfs.assets.alphaxiv.org/{canonical_id}.pdf` | PDF download URL used by the current paper UI. | yes |
 | `GET` | `https://paper-podcasts.alphaxiv.org/{paperGroupId}/podcast.mp3` | Podcast audio for a paper. | yes |
 | `GET` | `https://paper-podcasts.alphaxiv.org/{paperGroupId}/transcript.json` | Podcast transcript JSON. | yes |
-| `GET` | `https://clerk.alphaxiv.org/v1/environment` | Clerk environment bootstrap. | no |
-| `GET` | `https://clerk.alphaxiv.org/v1/client` | Clerk client bootstrap. | no |
 
 ## Routes Currently Used By This Repository
 
@@ -116,10 +118,10 @@ These are the endpoint groups currently wired into the SDK and CLI:
 - Search: `/search/v2/paper/fast`, `/v1/search/paper`, `/v1/search/closest-topic`, `/organizations/v2/search`
 - Feed support: `/organizations/v2/top`, `/papers/v3/feed`
 - Events: `/events/v1`
-- Papers: `/papers/v3/legacy/{id}`, `/papers/v3/{identifier}`, `/papers/v3/{identifier}/preview`, `/papers/v3/{paperGroupId}/figures`, `/papers/v3/legacy/{paperGroupId}/comments`, `/papers/v2/{paperVersionId}/comment`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/{paperVersionId}/ai-detection`, `/papers/v3/{paperVersionId}/model-links`, `/papers/v3/x-mentions-db/{paperGroupId}`, `/papers/v3/{paperGroupId}/view`, `/papers/v3/{paperId}/similar-papers`, `/v2/papers/{paperId}/vote`
+- Papers: `/papers/v3/legacy/{id}`, `/papers/v3/{identifier}`, `/papers/v3/{identifier}/preview`, `/papers/v3/{paperGroupId}/figures`, `/papers/v3/legacy/{paperGroupId}/comments`, `/papers/v2/{paperVersionId}/comment`, `/papers/v3/{paperVersionId}/full-text`, `/papers/v3/{paperVersionId}/overview/{lang}`, `/papers/v3/{paperVersionId}/overview/status`, `/papers/v3/{paperVersionId}/ai-detection`, `/papers/v3/{paperVersionId}/model-links`, `/papers/v3/x-mentions-db/{paperGroupId}`, `/papers/v3/{paperGroupId}/view`, `/papers/v3/{paperId}/similar-papers`, `/papers/v3/{paperGroupId}/like?liked={true|false}`
 - Assistant: `/assistant/v2?variant=homepage`, `/assistant/v2?variant=paper&paperVersion=...`, `/assistant/v2/{sessionId}/messages`, `/assistant/v2/chat`, `/assistant/v2/url-metadata`
 - Auth and preferences: `/users/v3`, `/users/v3/preferences`, `/folders/v3`, `/folders/v3/{folderId}/add-papers`, `/folders/v3/{folderId}/remove-papers`, `/comments/v2/{commentId}/upvote`, `/comments/v2/{commentId}`
-- Related hosts: `fetcher.alphaxiv.org` PDF URLs and `paper-podcasts.alphaxiv.org` transcript or podcast assets
+- Related hosts: `pdfs.assets.alphaxiv.org` PDF URLs and `paper-podcasts.alphaxiv.org` transcript or podcast assets
 
 ## Notes
 
@@ -135,6 +137,6 @@ These are the endpoint groups currently wired into the SDK and CLI:
 - `/papers/v3/{paperGroupId}/figures` returns `{"figures": [...]}` and may
   return an empty list for papers without extracted figures.
 - `/papers/v3/{paperVersionId}/ai-detection` and `/papers/v3/{paperVersionId}/model-links` require alphaXiv UUIDv7 paper-version IDs directly; SDK and CLI support should resolve arXiv IDs before calling these sidecar routes.
-- `POST /papers/v2/{paperVersionId}/comment` supports both top-level comments and replies. The web payload also contains annotation fields, but the current SDK/CLI intentionally expose only text fields in v1.
+- `POST /papers/v2/{paperVersionId}/comment` supports both top-level comments and replies. The SDK/CLI expose only text fields, but still send the nullable annotation fields required by the current web schema.
 - Multiple plausible comment edit routes were probed live and returned `404`; comment editing is not currently confirmed.
 - This inventory is based on live observation, not on official vendor documentation.

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from typing import Any, cast
+
 from tests.fixtures import (
     COMMENTS_PAYLOAD,
     FOLDERS_PAYLOAD,
@@ -90,6 +93,22 @@ def test_paper_from_payload() -> None:
     assert paper.pdf_url == "https://fetcher.alphaxiv.org/v2/pdf/2603.04379v1.pdf"
     assert paper.group.citation is not None
     assert "@article{yuan2026helios" in paper.group.citation
+
+
+def test_paper_from_payload_derives_pdf_asset_url_without_pdf_info() -> None:
+    resolved = ResolvedPaper(
+        input_id="2603.04379",
+        versionless_id="2603.04379",
+        canonical_id="2603.04379v1",
+        version_id="019cbc05-f158-7e3a-b9c1-a43274c0130b",
+        group_id="019cbc05-f11c-75c7-a13b-b028107d6a76",
+    )
+    payload = cast(dict[str, Any], deepcopy(LEGACY_PAYLOAD))
+    cast(dict[str, Any], payload["paper"]).pop("pdf_info")
+
+    paper = Paper.from_payload(resolved, payload)
+
+    assert paper.pdf_url == "https://pdfs.assets.alphaxiv.org/2603.04379v1.pdf"
 
 
 def test_paper_overview_from_payload() -> None:

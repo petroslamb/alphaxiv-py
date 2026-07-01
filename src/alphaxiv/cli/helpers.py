@@ -62,6 +62,8 @@ def make_assistant_client() -> AlphaXivClient:
     except Exception:
         saved_browser_auth = load_saved_browser_auth()
     if saved_browser_auth and not saved_browser_auth.is_expired:
+        if saved_browser_auth.cookie_header:
+            return AlphaXivClient(cookie_header=saved_browser_auth.cookie_header)
         return AlphaXivClient(authorization=saved_browser_auth.authorization_header)
     return make_client()
 
@@ -218,7 +220,10 @@ def render_browser_auth_table(saved_auth: SavedBrowserAuth) -> Table:
     table.add_row("Status", "expired" if saved_auth.is_expired else "configured")
     table.add_row("Source", saved_auth.source.replace("_", " "))
     table.add_row("Kind", saved_auth.kind.replace("_", " "))
-    table.add_row("Token Prefix", saved_auth.token_prefix)
+    if saved_auth.cookie_header:
+        table.add_row("Cookie Names", ", ".join(saved_auth.cookie_names) or "-")
+    else:
+        table.add_row("Token Prefix", saved_auth.token_prefix)
     table.add_row("User", saved_auth.display_name or "-")
     table.add_row("Email", saved_auth.email or "-")
     table.add_row("User ID", saved_auth.user_id or "-")

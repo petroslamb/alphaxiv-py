@@ -90,9 +90,10 @@ small amount of local context needed by the command.
 - `POST /folders/v3/{folderId}/remove-papers` removes one or more paper group
   ids from an authenticated folder.
 - `POST /papers/v2/{paperVersionId}/comment` creates top-level paper comments
-  and replies.
+  and replies. The current web schema requires nullable annotation fields even
+  when the SDK/CLI expose only text comments.
 - `POST /papers/v3/{paperGroupId}/view` records a paper view.
-- `POST /v2/papers/{paperId}/vote` toggles a paper vote.
+- `POST /papers/v3/{paperGroupId}/like?liked={true|false}` sets a paper vote.
 - `POST /comments/v2/{commentId}/upvote` toggles a comment upvote.
 - `DELETE /comments/v2/{commentId}` deletes a comment.
 
@@ -152,9 +153,9 @@ small amount of local context needed by the command.
 | `GET` | `/folders/v3` | `folders.list`, `folders.get`, `alphaxiv folders list`, `alphaxiv folders show`, `alphaxiv paper folders list` | none |
 | `POST` | `/folders/v3/{folderId}/add-papers` | `folders.add_papers`, `alphaxiv paper folders add` | `{"paperGroupIds": [...]}` |
 | `POST` | `/folders/v3/{folderId}/remove-papers` | `folders.remove_papers`, `alphaxiv paper folders remove` | `{"paperGroupIds": [...]}` |
-| `POST` | `/papers/v2/{paperVersionId}/comment` | `papers.create_comment`, `papers.reply_to_comment`, `alphaxiv paper comments add`, `alphaxiv paper comments reply` | `body`, optional `title`, `tag`, optional `parentCommentId` |
+| `POST` | `/papers/v2/{paperVersionId}/comment` | `papers.create_comment`, `papers.reply_to_comment`, `alphaxiv paper comments add`, `alphaxiv paper comments reply` | `body`, optional `title`, `tag`, optional `parentCommentId`, nullable annotation fields |
 | `POST` | `/papers/v3/{paperGroupId}/view` | `papers.record_view`, `alphaxiv paper view` | none |
-| `POST` | `/v2/papers/{paperId}/vote` | `papers.toggle_vote`, `alphaxiv paper vote` | none |
+| `POST` | `/papers/v3/{paperGroupId}/like?liked={true|false}` | `papers.toggle_vote`, `alphaxiv paper vote` | query `liked` after reading `/users/v3` `votedPaperGroups` |
 | `POST` | `/comments/v2/{commentId}/upvote` | `comments.toggle_upvote`, `alphaxiv paper comments upvote` | none |
 | `DELETE` | `/comments/v2/{commentId}` | `comments.delete`, `alphaxiv paper comments delete` | none |
 

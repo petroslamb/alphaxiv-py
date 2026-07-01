@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
+PDF_ASSETS_BASE_URL = "https://pdfs.assets.alphaxiv.org"
+
 
 def parse_datetime(value: str | None) -> datetime | None:
     """Parse alphaXiv date strings to datetime when possible."""
@@ -206,6 +208,19 @@ def _parse_rich_paper_authors(payload: dict[str, Any]) -> list[RichPaperAuthor]:
             seen.add(key)
             authors.append(author)
     return authors
+
+
+def _derive_pdf_url(resolved: ResolvedPaper, version: PaperVersion) -> str | None:
+    canonical_id = resolved.canonical_id
+    if not canonical_id and version.universal_paper_id:
+        version_label = version.version_label
+        if not version_label and version.version_order:
+            version_label = f"v{version.version_order}"
+        if version_label:
+            canonical_id = f"{version.universal_paper_id}{version_label}"
+    if not canonical_id:
+        return None
+    return f"{PDF_ASSETS_BASE_URL}/{canonical_id}.pdf"
 
 
 @dataclass(slots=True)
@@ -891,13 +906,14 @@ class Paper:
             Author.from_payload(item) for item in paper.get("verified_authors") or []
         ]
         pdf_info = paper.get("pdf_info") or {}
+        pdf_url = pdf_info.get("fetcher_url") or _derive_pdf_url(resolved, version)
         return cls(
             resolved=resolved,
             version=version,
             group=group,
             authors=authors,
             verified_authors=verified_authors,
-            pdf_url=pdf_info.get("fetcher_url"),
+            pdf_url=pdf_url,
             implementation=paper.get("implementation"),
             marimo_implementation=paper.get("marimo_implementation"),
             organization_info=list(paper.get("organization_info") or []),

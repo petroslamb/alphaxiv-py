@@ -204,7 +204,11 @@ def test_cli_public_context_and_paper_reads_smoke(
         env=isolated_cli_env,
     )
     assert_cli_ok(resources, "paper", "resources", SMOKE_PAPER_ID, "--bibtex")
-    assert "@article" in resources.output.lower()
+    resources_output = resources.output.lower()
+    assert resources_output.startswith("@")
+    assert "attention is all you need" in resources_output
+    assert "1706.03762" in resources_output
+    assert "arxiv" in resources_output
 
     pdf_url = invoke_cli(
         cli_runner,
@@ -212,7 +216,8 @@ def test_cli_public_context_and_paper_reads_smoke(
         env=isolated_cli_env,
     )
     assert_cli_ok(pdf_url, "paper", "pdf", "url", SMOKE_PAPER_ID)
-    assert "fetcher.alphaxiv.org" in pdf_url.output
+    assert "alphaxiv.org" in pdf_url.output
+    assert pdf_url.output.strip().endswith(".pdf")
 
     pdf_path = tmp_path / "attention.pdf"
     download = invoke_cli(

@@ -34,14 +34,14 @@ Live smoke layers:
 This codebase intentionally targets direct HTTP access to alphaXiv's public and authenticated
 endpoints.
 
-Folders, comment mutations, paper votes, and paper views still use API-key auth.
-
-Assistant commands use direct HTTP + SSE as well, but they can now authenticate through either:
+Folders, comment mutations, paper votes, paper views, overview generation, and assistant commands
+use direct HTTP + SSE where applicable. They can authenticate through either:
 
 - an alphaXiv API key
 - a browser-backed session saved by `alphaxiv auth login-web`
 
-This matters because some alphaXiv accounts can read assistant metadata with an API key but cannot
-start or reply to assistant chats unless the request uses the browser-backed web session.
+This matters because some alphaXiv accounts can read authenticated metadata with an API key but
+cannot perform certain writes unless the request uses the browser-backed web session. The current
+browser-backed path saves an alphaXiv session cookie when the web app does not expose a bearer token.
 
 All live smoke tests use a temporary `ALPHAXIV_HOME`, so they do not read from or write to the operator's real local CLI state.

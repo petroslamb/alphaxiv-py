@@ -54,5 +54,5 @@ class CommentsAPI:
         )
 
     def _require_auth(self) -> None:
-        if not self._core.authorization:
+        if not self._core.has_auth:
             raise AuthRequiredError(COMMENTS_AUTH_REQUIRED_MESSAGE)

@@ -15,6 +15,7 @@ from alphaxiv.alphaxiv_cli import cli
 from alphaxiv.auth import (
     ALPHAXIV_API_KEY_ENV,
     ensure_saved_browser_auth,
+    fetch_current_user,
     load_saved_browser_auth,
     save_browser_auth,
 )
@@ -134,7 +135,7 @@ def seed_saved_browser_auth(env: dict[str, str]) -> bool:
 
     with temporary_cli_env(source_env):
         saved_auth = load_saved_browser_auth()
-        if saved_auth is None:
+        if saved_auth is None or saved_auth.is_expired:
             saved_auth = ensure_saved_browser_auth()
         if saved_auth is None or saved_auth.is_expired:
             return False
@@ -239,6 +240,33 @@ async def _fetch_paper_group_id(api_key: str, paper_id: str) -> str:
 
 def fetch_paper_group_id(api_key: str, paper_id: str = SMOKE_PAPER_ID) -> str:
     return asyncio.run(_fetch_paper_group_id(api_key, paper_id))
+
+
+def fetch_voted_paper_groups(api_key: str) -> list[str]:
+    user = fetch_current_user(api_key)
+    voted_groups = user.get("votedPaperGroups")
+    return list(voted_groups) if isinstance(voted_groups, list) else []
+
+
+def wait_for_paper_vote_state(
+    api_key: str,
+    paper_group_id: str,
+    expected: bool,
+    *,
+    attempts: int = 5,
+    delay_seconds: float = 1.0,
+) -> bool:
+    last_seen: bool | None = None
+    for attempt in range(attempts):
+        last_seen = paper_group_id in fetch_voted_paper_groups(api_key)
+        if last_seen is expected:
+            return last_seen
+        if attempt < attempts - 1:
+            time.sleep(delay_seconds)
+    raise AssertionError(
+        f"Paper group '{paper_group_id}' did not reach voted={expected}. "
+        f"Last observed value: {last_seen}."
+    )
 
 
 def find_folder_membership_target(

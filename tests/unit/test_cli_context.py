@@ -10,6 +10,7 @@ from alphaxiv.auth import (
     SavedApiKey,
     build_saved_api_key,
     build_saved_browser_auth,
+    build_saved_browser_cookie_auth,
     load_saved_api_key,
     load_saved_browser_auth,
     save_api_key,
@@ -197,7 +198,28 @@ def test_auth_status_shows_saved_browser_auth(monkeypatch, tmp_path) -> None:
     assert "petros@example.com" in status.output
     assert "browser-session-token" not in status.output
     assert "browser-sess" in status.output
-    assert "Assistant commands prefer saved web login" in status.output
+    assert "Authenticated commands prefer saved web login" in status.output
+
+
+def test_auth_status_shows_saved_browser_cookie_auth(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    monkeypatch.delenv("ALPHAXIV_API_KEY", raising=False)
+    save_browser_auth(
+        build_saved_browser_cookie_auth(
+            "__Secure-alphaxiv_auth.session_token=secret",
+            user={"name": "Petros", "email": "petros@example.com"},
+            created_at=datetime(2026, 3, 11, tzinfo=UTC),
+        )
+    )
+
+    status = runner.invoke(cli, ["auth", "status"])
+
+    assert status.exit_code == 0
+    assert "alphaXiv Web Login" in status.output
+    assert "browser cookie" in status.output
+    assert "__Secure-alphaxiv_auth.session_token" in status.output
+    assert "secret" not in status.output
 
 
 def test_make_assistant_client_prefers_saved_browser_auth(monkeypatch, tmp_path) -> None:
@@ -208,6 +230,19 @@ def test_make_assistant_client_prefers_saved_browser_auth(monkeypatch, tmp_path)
     client = make_assistant_client()
 
     assert client._core.authorization == "Bearer browser-session-token"
+
+
+def test_make_assistant_client_prefers_saved_browser_cookie_auth(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    save_browser_auth(
+        build_saved_browser_cookie_auth("__Secure-alphaxiv_auth.session_token=secret")
+    )
+    monkeypatch.setattr("alphaxiv.cli.helpers.load_api_key_value", lambda: "axv1_saved-token")
+
+    client = make_assistant_client()
+
+    assert client._core.authorization is None
+    assert client._core.cookie_header == "__Secure-alphaxiv_auth.session_token=secret"
 
 
 def test_context_use_paper_and_show(monkeypatch, tmp_path) -> None:

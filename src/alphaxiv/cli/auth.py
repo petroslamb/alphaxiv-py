@@ -28,7 +28,7 @@ from .helpers import (
 auth = WrappedHelpGroup(
     "auth",
     help=(
-        "Configure API-key auth and optional browser-backed assistant auth.\n\n"
+        "Configure API-key auth and optional browser-backed web auth.\n\n"
         "Examples:\n"
         "  alphaxiv auth set-api-key\n"
         "  alphaxiv auth login-web\n"
@@ -130,13 +130,15 @@ def status() -> None:
             )
         else:
             console.print(
-                "[dim]Run 'alphaxiv auth login-web' if you need assistant access through the web "
+                "[dim]Run 'alphaxiv auth login-web' if you need authenticated access through the web "
                 "session.[/dim]"
             )
 
     if saved_browser_auth:
         console.print()
-        console.print("[dim]Assistant commands prefer saved web login when it is available.[/dim]")
+        console.print(
+            "[dim]Authenticated commands prefer saved web login when it is available.[/dim]"
+        )
 
 
 @auth.command("clear")
@@ -158,7 +160,7 @@ def clear() -> None:
     help="Also remove the saved Playwright browser profile under ALPHAXIV_HOME.",
 )
 def clear_web(clear_browser_profile: bool) -> None:
-    """Remove the saved browser-backed auth used by assistant commands."""
+    """Remove the saved browser-backed web auth."""
     had_browser_auth = get_browser_auth_path().exists()
     had_browser_profile = get_browser_profile_path().exists()
     clear_saved_browser_auth(clear_browser_profile=clear_browser_profile)

@@ -32,12 +32,17 @@ class AlphaXivClient:
         *,
         api_key: str | None = None,
         authorization: str | None = None,
+        cookie_header: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
-        if api_key and authorization:
-            raise ValueError("Pass either api_key or authorization, not both.")
+        if sum(value is not None for value in (api_key, authorization, cookie_header)) > 1:
+            raise ValueError("Pass only one of api_key, authorization, or cookie_header.")
         resolved_authorization = authorization or (f"Bearer {api_key}" if api_key else None)
-        self._core = ClientCore(authorization=resolved_authorization, timeout=timeout)
+        self._core = ClientCore(
+            authorization=resolved_authorization,
+            cookie_header=cookie_header,
+            timeout=timeout,
+        )
         self.events = EventsAPI(self._core)
         self.search = SearchAPI(self._core)
         self.explore = ExploreAPI(self._core)
@@ -74,6 +79,15 @@ class AlphaXivClient:
         return cls(authorization=authorization, timeout=timeout)
 
     @classmethod
+    def from_cookie_header(
+        cls,
+        cookie_header: str,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> AlphaXivClient:
+        """Create a client from an explicit browser Cookie header value."""
+        return cls(cookie_header=cookie_header, timeout=timeout)
+
+    @classmethod
     def from_saved_browser_auth(cls, timeout: float = DEFAULT_TIMEOUT) -> AlphaXivClient:
         """Create a client from saved browser-backed alphaXiv auth."""
         from .auth import ensure_saved_browser_auth
@@ -83,6 +97,8 @@ class AlphaXivClient:
             raise ValueError(
                 "No browser-backed alphaXiv auth is configured. Run 'alphaxiv auth login-web'."
             )
+        if saved_auth.cookie_header:
+            return cls(cookie_header=saved_auth.cookie_header, timeout=timeout)
         return cls(authorization=saved_auth.authorization_header, timeout=timeout)
 
     @classmethod
@@ -140,7 +156,7 @@ class AlphaXivClient:
         if on_missing is not None:
             on_missing()
 
-        if not self._core.authorization:
+        if not self._core.has_auth:
             raise AuthRequiredError(
                 "Overview generation requires authentication. Set ALPHAXIV_API_KEY, run "
                 "'alphaxiv auth set-api-key' or 'alphaxiv auth login-web', or pass api_key/"

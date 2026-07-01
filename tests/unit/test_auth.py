@@ -9,6 +9,7 @@ from alphaxiv.auth import (
     authenticate_with_api_key,
     build_saved_api_key,
     build_saved_browser_auth,
+    build_saved_browser_cookie_auth,
     clear_saved_api_key,
     clear_saved_browser_auth,
     ensure_saved_browser_auth,
@@ -84,6 +85,42 @@ def test_save_and_load_browser_auth(monkeypatch, tmp_path) -> None:
     assert loaded.display_name == "petros"
     assert loaded.created_at == datetime(2026, 3, 12, 9, 0, tzinfo=UTC)
     assert get_browser_auth_path().exists()
+
+
+def test_build_saved_browser_cookie_auth_exposes_cookie_names() -> None:
+    saved_auth = build_saved_browser_cookie_auth(
+        "__Secure-alphaxiv_auth.session_token=secret; ignored_without_value",
+        user={"name": "Petros", "email": "petros@example.com"},
+        expires_at=datetime(2026, 3, 12, 10, 0, tzinfo=UTC),
+        created_at=datetime(2026, 3, 12, 9, 0, tzinfo=UTC),
+    )
+
+    assert saved_auth.access_token == ""
+    assert saved_auth.cookie_header == "__Secure-alphaxiv_auth.session_token=secret; ignored_without_value"
+    assert saved_auth.auth_headers == {
+        "Cookie": "__Secure-alphaxiv_auth.session_token=secret; ignored_without_value"
+    }
+    assert saved_auth.kind == "browser_cookie"
+    assert saved_auth.cookie_names == ["__Secure-alphaxiv_auth.session_token"]
+    assert saved_auth.display_name == "Petros"
+
+
+def test_save_and_load_browser_cookie_auth(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ALPHAXIV_HOME", str(tmp_path / ".alphaxiv"))
+    saved_auth = build_saved_browser_cookie_auth(
+        "__Secure-alphaxiv_auth.session_token=secret",
+        user={"email": "petros@example.com"},
+        expires_at=datetime(2026, 3, 12, 10, 0, tzinfo=UTC),
+        created_at=datetime(2026, 3, 12, 9, 0, tzinfo=UTC),
+    )
+
+    save_browser_auth(saved_auth)
+    loaded = load_saved_browser_auth()
+
+    assert loaded is not None
+    assert loaded.cookie_header == "__Secure-alphaxiv_auth.session_token=secret"
+    assert loaded.kind == "browser_cookie"
+    assert loaded.email == "petros@example.com"
 
 
 def test_clear_saved_api_key_removes_saved_key(monkeypatch, tmp_path) -> None:

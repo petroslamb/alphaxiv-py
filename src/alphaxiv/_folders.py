@@ -55,7 +55,7 @@ class FoldersAPI:
         return await self.get(target.id)
 
     def _require_auth(self) -> None:
-        if not self._core.authorization:
+        if not self._core.has_auth:
             raise AuthRequiredError(FOLDERS_AUTH_REQUIRED_MESSAGE)
 
     def _resolve_selector(self, folders: Sequence[Folder], selector: str) -> Folder:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import secrets
 
 import pytest
 from tests.e2e.helpers import (
@@ -10,15 +12,23 @@ from tests.e2e.helpers import (
     fetch_first_comment_id,
     fetch_folders,
     fetch_paper_group_id,
+    fetch_voted_paper_groups,
     find_folder_membership_target,
     invoke_cli,
     require_live_auth_smoke,
     seed_saved_api_key,
     wait_for_comment_upvote_state,
     wait_for_folder_membership_state,
+    wait_for_paper_vote_state,
 )
 
 pytestmark = pytest.mark.e2e
+
+
+def _extract_created_id(label: str, output: str) -> str:
+    match = re.search(rf"{label}\s+([0-9a-f-]+)", output)
+    assert match is not None, output
+    return match.group(1)
 
 
 def test_cli_auth_status_and_assistant_reads_smoke(
@@ -209,3 +219,105 @@ def test_cli_auth_comment_upvote_is_reversible(
         paper_id=SMOKE_PAPER_ID,
     )
     assert restored.has_upvoted is original_state
+
+
+def test_cli_auth_comment_create_reply_delete_is_reversible(
+    cli_runner,
+    isolated_cli_env: dict[str, str],
+) -> None:
+    api_key = require_live_auth_smoke()
+    seed_saved_api_key(cli_runner, isolated_cli_env, api_key)
+
+    nonce = secrets.token_hex(4)
+    parent_id: str | None = None
+    reply_id: str | None = None
+    try:
+        parent = invoke_cli(
+            cli_runner,
+            [
+                "paper",
+                "comments",
+                "add",
+                SMOKE_PAPER_ID,
+                "--title",
+                f"alphaxiv-py smoke {nonce}",
+                "--body",
+                f"alphaxiv-py live smoke parent {nonce}",
+            ],
+            env=isolated_cli_env,
+        )
+        assert_cli_ok(parent, "paper", "comments", "add", SMOKE_PAPER_ID, "--body", "<body>")
+        assert "Created comment" in parent.output
+        parent_id = _extract_created_id("Created comment", parent.output)
+
+        reply = invoke_cli(
+            cli_runner,
+            [
+                "paper",
+                "comments",
+                "reply",
+                SMOKE_PAPER_ID,
+                parent_id,
+                "--body",
+                f"alphaxiv-py live smoke reply {nonce}",
+            ],
+            env=isolated_cli_env,
+        )
+        assert_cli_ok(
+            reply,
+            "paper",
+            "comments",
+            "reply",
+            SMOKE_PAPER_ID,
+            parent_id,
+            "--body",
+            "<body>",
+        )
+        assert "Created reply" in reply.output
+        reply_id = _extract_created_id("Created reply", reply.output)
+    finally:
+        if reply_id:
+            delete_reply = invoke_cli(
+                cli_runner,
+                ["paper", "comments", "delete", reply_id, "--yes"],
+                env=isolated_cli_env,
+            )
+            assert_cli_ok(delete_reply, "paper", "comments", "delete", reply_id, "--yes")
+            assert "Deleted comment" in delete_reply.output
+        if parent_id:
+            delete_parent = invoke_cli(
+                cli_runner,
+                ["paper", "comments", "delete", parent_id, "--yes"],
+                env=isolated_cli_env,
+            )
+            assert_cli_ok(delete_parent, "paper", "comments", "delete", parent_id, "--yes")
+            assert "Deleted comment" in delete_parent.output
+
+
+def test_cli_auth_paper_vote_is_reversible(
+    cli_runner,
+    isolated_cli_env: dict[str, str],
+) -> None:
+    api_key = require_live_auth_smoke()
+    seed_saved_api_key(cli_runner, isolated_cli_env, api_key)
+
+    paper_group_id = fetch_paper_group_id(api_key, SMOKE_PAPER_ID)
+    original_state = paper_group_id in fetch_voted_paper_groups(api_key)
+
+    first_vote = invoke_cli(
+        cli_runner,
+        ["paper", "vote", SMOKE_PAPER_ID, "--yes"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(first_vote, "paper", "vote", SMOKE_PAPER_ID, "--yes")
+    assert "Toggled vote for" in first_vote.output
+    wait_for_paper_vote_state(api_key, paper_group_id, not original_state)
+
+    second_vote = invoke_cli(
+        cli_runner,
+        ["paper", "vote", SMOKE_PAPER_ID, "--yes"],
+        env=isolated_cli_env,
+    )
+    assert_cli_ok(second_vote, "paper", "vote", SMOKE_PAPER_ID, "--yes")
+    restored = wait_for_paper_vote_state(api_key, paper_group_id, original_state)
+    assert restored is original_state

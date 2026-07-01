@@ -33,6 +33,13 @@ LOCAL_STORAGE_TOKEN_KEYS = (
     "alphaxiv_client_api_key_original",
     "alphaxiv_client_api_key_impersonation",
 )
+ALPHAXIV_COOKIE_URLS = (
+    "https://www.alphaxiv.org",
+    BASE_API_URL,
+)
+BROWSER_AUTH_COOKIE_NAMES = (
+    "__Secure-alphaxiv_auth.session_token",
+)
 
 
 def _coalesce_string(*values: Any) -> str | None:
@@ -89,6 +96,13 @@ def _normalize_bearer_secret(secret: str) -> str:
 
 def _normalize_api_key(secret: str) -> str:
     return _normalize_bearer_secret(secret)
+
+
+def _normalize_cookie_header(cookie_header: str) -> str:
+    cleaned = cookie_header.strip()
+    if "\r" in cleaned or "\n" in cleaned:
+        return ""
+    return "; ".join(part.strip() for part in cleaned.split(";") if part.strip())
 
 
 def _looks_like_api_key(secret: str) -> bool:
@@ -198,7 +212,7 @@ class SavedApiKey:
 
 @dataclass(slots=True)
 class SavedBrowserAuth:
-    """Resolved alphaXiv browser-backed bearer auth from disk or a Playwright profile."""
+    """Resolved alphaXiv browser-backed auth from disk or a Playwright profile."""
 
     access_token: str
     created_at: datetime
@@ -206,14 +220,34 @@ class SavedBrowserAuth:
     kind: str = "bearer_token"
     source: str = "saved"
     user: dict[str, Any] = field(default_factory=dict, repr=False)
+    cookie_header: str | None = field(default=None, repr=False)
 
     @property
     def authorization_header(self) -> str:
         return f"Bearer {self.access_token}"
 
     @property
+    def auth_headers(self) -> dict[str, str]:
+        if self.cookie_header:
+            return {"Cookie": self.cookie_header}
+        if self.access_token:
+            return {"Authorization": self.authorization_header}
+        return {}
+
+    @property
     def token_prefix(self) -> str:
         return self.access_token[:12]
+
+    @property
+    def cookie_names(self) -> list[str]:
+        if not self.cookie_header:
+            return []
+        names: list[str] = []
+        for part in self.cookie_header.split(";"):
+            name, _, value = part.strip().partition("=")
+            if name and value:
+                names.append(name)
+        return names
 
     @property
     def user_id(self) -> str | None:
@@ -234,6 +268,7 @@ class SavedBrowserAuth:
     def to_dict(self) -> dict[str, Any]:
         return {
             "access_token": self.access_token,
+            "cookie_header": self.cookie_header,
             "created_at": self.created_at.isoformat(),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "kind": self.kind,
@@ -245,6 +280,12 @@ class SavedBrowserAuth:
     def from_dict(cls, payload: dict[str, Any]) -> SavedBrowserAuth:
         user_payload = payload.get("user")
         access_token = _normalize_bearer_secret(str(payload.get("access_token", "")))
+        raw_cookie_header = payload.get("cookie_header")
+        cookie_header = (
+            _normalize_cookie_header(raw_cookie_header)
+            if isinstance(raw_cookie_header, str)
+            else None
+        )
         return cls(
             access_token=access_token,
             created_at=_parse_iso_datetime(payload.get("created_at")) or datetime.now(UTC),
@@ -252,7 +293,7 @@ class SavedBrowserAuth:
             kind=(
                 str(payload.get("kind")).strip()
                 if isinstance(payload.get("kind"), str) and str(payload.get("kind")).strip()
-                else _detect_bearer_auth_kind(access_token)
+                else ("browser_cookie" if cookie_header else _detect_bearer_auth_kind(access_token))
             ),
             source=(
                 str(payload.get("source")).strip()
@@ -260,6 +301,7 @@ class SavedBrowserAuth:
                 else "saved"
             ),
             user=cast(dict[str, Any], user_payload) if isinstance(user_payload, dict) else {},
+            cookie_header=cookie_header,
         )
 
 
@@ -300,6 +342,27 @@ def build_saved_browser_auth(
     )
 
 
+def build_saved_browser_cookie_auth(
+    cookie_header: str,
+    *,
+    user: dict[str, Any] | None = None,
+    expires_at: datetime | None = None,
+    source: str = "saved",
+    created_at: datetime | None = None,
+) -> SavedBrowserAuth:
+    """Construct a SavedBrowserAuth instance from browser session cookies."""
+    normalized = _normalize_cookie_header(cookie_header)
+    return SavedBrowserAuth(
+        access_token="",
+        cookie_header=normalized,
+        created_at=created_at or datetime.now(UTC),
+        expires_at=expires_at,
+        kind="browser_cookie",
+        source=source,
+        user=user or {},
+    )
+
+
 def load_saved_api_key(path: Path | None = None) -> SavedApiKey | None:
     """Load the locally saved API key, if present."""
     api_key_path = path or get_api_key_path()
@@ -329,7 +392,7 @@ def load_saved_browser_auth(path: Path | None = None) -> SavedBrowserAuth | None
     if not isinstance(payload, dict):
         return None
     saved_auth = SavedBrowserAuth.from_dict(payload)
-    if not saved_auth.access_token:
+    if not saved_auth.access_token and not saved_auth.cookie_header:
         return None
     return saved_auth
 
@@ -418,12 +481,12 @@ def clear_saved_browser_auth(
             shutil.rmtree(profile_path)
 
 
-def fetch_current_user(access_token: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
-    """Validate a bearer token against alphaXiv's authenticated user endpoint."""
-    headers = {
-        "Authorization": f"Bearer {_normalize_bearer_secret(access_token)}",
-        "User-Agent": USER_AGENT,
-    }
+def fetch_current_user_with_headers(
+    auth_headers: dict[str, str],
+    timeout: float = DEFAULT_TIMEOUT,
+) -> dict[str, Any]:
+    """Validate auth headers against alphaXiv's authenticated user endpoint."""
+    headers = {"User-Agent": USER_AGENT, **auth_headers}
     try:
         with httpx.Client(timeout=timeout, headers=headers) as client:
             response = client.get(f"{BASE_API_URL}/users/v3")
@@ -467,6 +530,14 @@ def fetch_current_user(access_token: str, timeout: float = DEFAULT_TIMEOUT) -> d
     return {"raw": payload}
 
 
+def fetch_current_user(access_token: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
+    """Validate a bearer token against alphaXiv's authenticated user endpoint."""
+    return fetch_current_user_with_headers(
+        {"Authorization": f"Bearer {_normalize_bearer_secret(access_token)}"},
+        timeout=timeout,
+    )
+
+
 def authenticate_with_api_key(api_key: str, timeout: float = DEFAULT_TIMEOUT) -> SavedApiKey:
     """Validate and package an explicit alphaXiv API key."""
     normalized = _normalize_api_key(api_key)
@@ -484,52 +555,48 @@ def refresh_saved_browser_auth(timeout: float = DEFAULT_TIMEOUT) -> SavedBrowser
     if not browser_profile.exists():
         return None
     try:
-        access_token = _extract_access_token_for_refresh()
+        saved_auth = _extract_browser_auth_for_refresh(timeout=timeout)
     except RuntimeError:
         return None
-    if not access_token:
+    if not saved_auth:
         return None
-    user_payload = fetch_current_user(access_token, timeout=timeout)
-    saved_auth = build_saved_browser_auth(
-        access_token,
-        user=user_payload,
-        source="browser_profile",
-    )
     save_browser_auth(saved_auth)
     return saved_auth
 
 
 def authenticate_with_browser() -> SavedBrowserAuth:
-    """Open a browser for alphaXiv login, then capture and validate a bearer token."""
+    """Open a browser for alphaXiv login, then capture and validate browser auth."""
     browser_profile = get_browser_profile_path()
     browser_profile.mkdir(parents=True, exist_ok=True, mode=0o700)
-    access_token = _extract_access_token_from_browser_profile(headless=False, interactive=True)
+    saved_auth = _extract_browser_auth_from_browser_profile(headless=False, interactive=True)
 
-    if not access_token:
+    if not saved_auth:
         raise RuntimeError(
-            "Login completed, but no alphaXiv access token was available in the browser session."
+            "Login completed, but no alphaXiv browser auth was available in the browser session."
         )
 
-    user_payload = fetch_current_user(access_token)
-    return build_saved_browser_auth(access_token, user=user_payload, source="browser_login")
+    return saved_auth
 
 
-def _extract_access_token_for_refresh() -> str | None:
+def _extract_browser_auth_for_refresh(timeout: float = DEFAULT_TIMEOUT) -> SavedBrowserAuth | None:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return _extract_access_token_from_browser_profile(headless=True)
+        return _extract_browser_auth_from_browser_profile(headless=True, timeout=timeout)
     return cast(
-        str | None,
-        _run_in_thread(lambda: _extract_access_token_from_browser_profile(headless=True)),
+        SavedBrowserAuth | None,
+        _run_in_thread(
+            lambda: _extract_browser_auth_from_browser_profile(headless=True, timeout=timeout)
+        ),
     )
 
 
-def _extract_access_token_from_browser_profile(
+def _extract_browser_auth_from_browser_profile(
     *,
     headless: bool,
     interactive: bool = False,
-) -> str | None:
+    timeout: float = DEFAULT_TIMEOUT,
+) -> SavedBrowserAuth | None:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
@@ -555,9 +622,70 @@ def _extract_access_token_from_browser_profile(
             if interactive:
                 input("[Press ENTER after completing the alphaXiv sign-in flow] ")
             page.goto("https://www.alphaxiv.org/", wait_until="domcontentloaded")
-            return _extract_access_token(page)
+            access_token = _extract_access_token(page)
+            if access_token:
+                user_payload = fetch_current_user(access_token, timeout=timeout)
+                return build_saved_browser_auth(
+                    access_token,
+                    user=user_payload,
+                    source="browser_login" if interactive else "browser_profile",
+                )
+
+            cookie_header, expires_at = _extract_auth_cookie_header(context)
+            if not cookie_header:
+                return None
+            saved_auth = build_saved_browser_cookie_auth(
+                cookie_header,
+                expires_at=expires_at,
+                source="browser_login" if interactive else "browser_profile",
+            )
+            user_payload = fetch_current_user_with_headers(saved_auth.auth_headers, timeout=timeout)
+            return build_saved_browser_cookie_auth(
+                cookie_header,
+                user=user_payload,
+                expires_at=expires_at,
+                source="browser_login" if interactive else "browser_profile",
+            )
         finally:
             context.close()
+
+
+def _extract_auth_cookie_header(context: Any) -> tuple[str | None, datetime | None]:
+    cookies = context.cookies(list(ALPHAXIV_COOKIE_URLS))
+    now = datetime.now(UTC)
+    pairs: list[str] = []
+    expires_at_values: list[datetime] = []
+    for cookie in cookies:
+        if not isinstance(cookie, dict):
+            continue
+        name = cookie.get("name")
+        value = cookie.get("value")
+        domain = cookie.get("domain")
+        if name not in BROWSER_AUTH_COOKIE_NAMES:
+            continue
+        if not isinstance(value, str) or not value:
+            continue
+        if not isinstance(domain, str) or not domain.endswith("alphaxiv.org"):
+            continue
+        expires_at = _cookie_expires_at(cookie)
+        if expires_at and expires_at <= now:
+            continue
+        pairs.append(f"{name}={value}")
+        if expires_at:
+            expires_at_values.append(expires_at)
+    if not pairs:
+        return None, None
+    return "; ".join(pairs), min(expires_at_values) if expires_at_values else None
+
+
+def _cookie_expires_at(cookie: dict[str, Any]) -> datetime | None:
+    expires = cookie.get("expires")
+    if not isinstance(expires, (int, float)) or expires == -1:
+        return None
+    try:
+        return datetime.fromtimestamp(expires, tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _extract_access_token(page: Any) -> str | None:

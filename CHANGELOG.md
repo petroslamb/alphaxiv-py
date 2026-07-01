@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.0 - 2026-07-02
+
+- Restored browser-backed web auth for the current alphaXiv Better Auth session
+  cookie flow, while preserving legacy browser bearer-token support.
+- Scoped saved bearer and browser-cookie auth headers to `api.alphaxiv.org`
+  requests and allowed authenticated SDK/CLI flows to use either saved auth
+  shape.
+- Updated paper comment creation, paper vote toggling, and PDF URL handling for
+  the current web app endpoints and payloads.
+- Expanded live smoke coverage for reversible authenticated comment and paper
+  vote writes, public PDF URL checks, and assistant write flows.
+- Refreshed auth, endpoint, CLI reference, development, and feature-spec
+  documentation to match the current web app behavior.
+
 ## 0.6.0 - 2026-05-18
 
 - Added authenticated overview generation fallback for `alphaxiv paper overview`

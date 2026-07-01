@@ -5,7 +5,7 @@
 This v1 release is intentionally public-first. It supports:
 
 - API-key auth via `ALPHAXIV_API_KEY` or a locally saved alphaXiv API key
-- optional browser-backed web login for assistant commands when API-key chat writes are restricted
+- optional browser-backed web login for authenticated CLI/API access when API-key writes are restricted
 - authenticated assistant chat for homepage and paper-scoped sessions
 - homepage search suggestions for papers, topics, and organizations
 - homepage feed/card retrieval with sort and filter support
@@ -24,7 +24,7 @@ This v1 release is intentionally public-first. It supports:
 - authenticated paper votes plus comment create, reply, delete, and upvote mutations
 - CLI context around a current paper and assistant session
 
-Authenticated features use direct HTTP bearer auth against `api.alphaxiv.org`. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv auth set-api-key`. If your account's API key can read assistant metadata but cannot start or reply to chats, run `alphaxiv auth login-web`; assistant commands prefer the saved web login when it is available. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
+Authenticated features use direct HTTP against `api.alphaxiv.org` with either an API-key bearer header or a browser-backed alphaXiv web session. The recommended setup is an alphaXiv API key exposed through `ALPHAXIV_API_KEY` or saved locally with `alphaxiv auth set-api-key`. If your account's API key can read authenticated metadata but cannot perform writes, run `alphaxiv auth login-web`; authenticated CLI commands prefer the saved web login when it is available. The client reads the current preferred model live from `GET /users/v3` and writes changes through `PATCH /users/v3/preferences`; it does not claim to know the full current model catalog.
 
 ## Installation
 
@@ -78,8 +78,8 @@ alphaxiv auth login-web
 ```
 
 Use `auth login-web` as one-time setup for a persistent browser profile, not before every
-assistant command. After it succeeds, just use `alphaxiv assistant ...` normally and the CLI will
-try to refresh the saved web token automatically from `ALPHAXIV_HOME/browser-profile`.
+assistant command. After it succeeds, just use authenticated CLI commands normally and the CLI will
+try to refresh the saved web session automatically from `ALPHAXIV_HOME/browser-profile`.
 
 If someone keeps rerunning `auth login-web`, the usual problem is operational rather than
 token-lifetime alone:
@@ -160,7 +160,7 @@ alphaxiv auth clear-web
 
 `--json` is the stable machine-readable output mode for automation and agents.
 `--raw` stays available on selected commands when you want the backend-shaped payload for debugging.
-Assistant commands prefer the saved web login when it is available, and otherwise fall back to API-key auth.
+Authenticated CLI commands prefer the saved web login when it is available, and otherwise fall back to API-key auth.
 
 Long-running assistant chats can become slower over time because `assistant reply` keeps extending
 the same remote session. If a chat becomes sluggish and you do not need the whole thread active,

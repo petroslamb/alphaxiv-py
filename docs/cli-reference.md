@@ -55,8 +55,10 @@ playwright install chromium
 ```
 
 Treat `auth login-web` as one-time setup for a persistent browser profile. After it succeeds, use
-`alphaxiv assistant ...` normally; the CLI will try to refresh the saved web token automatically
-from `ALPHAXIV_HOME/browser-profile`.
+authenticated CLI commands normally; the CLI will try to refresh the saved web session
+automatically from `ALPHAXIV_HOME/browser-profile`. Current alphaXiv web auth may be stored as a
+browser session cookie rather than a bearer token; `auth status` reports the auth kind without
+printing secret values.
 
 `paper overview` will, by default, request overview generation when the public overview endpoint
 returns `404` (overview not generated yet) and then wait until it becomes available. Use
@@ -307,7 +309,7 @@ cards, `--json` for normalized similar-card output, or `--raw` to print the raw 
 - `--page <n>` is repeatable and limits output to specific 1-based pages.
 - Add `--json` for normalized page objects and joined text.
 
-`paper pdf url` prints the resolved fetcher URL for the public PDF. Add `--json` for a stable
+`paper pdf url` prints the resolved public PDF asset URL. Add `--json` for a stable
 `paper_id` + `pdf_url` object.
 
 `paper pdf download` accepts either `<path>` or `<paper-id> <path>`. If the paper id is omitted,
@@ -339,8 +341,8 @@ alphaxiv assistant history --json
 The assistant uses authenticated `assistant/v2` endpoints and streams responses over
 `text/event-stream`.
 
-Assistant commands prefer the saved web login from `alphaxiv auth login-web` when it is available,
-and otherwise fall back to API-key auth.
+Authenticated CLI commands prefer the saved web login from `alphaxiv auth login-web` when it is
+available, and otherwise fall back to API-key auth.
 
 `assistant list` defaults to homepage chats. Add `--paper <paper-id>` to list paper-scoped chats
 for a specific paper. Add `--json` for a normalized session list.

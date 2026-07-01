@@ -40,9 +40,11 @@ the authenticated overview generation path used when an overview is missing.
   replies when authenticated.
 - `POST /papers/v3/{paperGroupId}/view` records a paper view when
   authenticated.
-- `POST /v2/papers/{paperId}/vote` toggles a paper vote when authenticated.
-- `https://fetcher.alphaxiv.org/v2/pdf/{canonical_id}.pdf` provides PDF
-  downloads from the PDF URL embedded in the metadata payload.
+- `POST /papers/v3/{paperGroupId}/like?liked={true|false}` sets a paper vote
+  when authenticated; toggle behavior reads current user `votedPaperGroups`
+  first.
+- `https://pdfs.assets.alphaxiv.org/{canonical_id}.pdf` provides PDF
+  downloads when the metadata payload omits an explicit PDF URL.
 - `https://paper-podcasts.alphaxiv.org/{paperGroupId}/podcast.mp3` provides the
   podcast audio URL when the metadata payload contains a podcast path.
 - `https://paper-podcasts.alphaxiv.org/{paperGroupId}/transcript.json` provides

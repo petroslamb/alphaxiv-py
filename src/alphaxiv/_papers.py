@@ -131,7 +131,7 @@ class PapersAPI:
 
         This mirrors the web UI's "Generate Overview" button.
         """
-        if not self._core.authorization:
+        if not self._core.has_auth:
             raise AuthRequiredError("Overview generation requires authentication.")
 
         preferred_language = _normalize_overview_language(preferred_language)
@@ -446,9 +446,16 @@ class PapersAPI:
             resolved,
             operation="Paper vote toggling",
         )
+        user_payload = await self._core.get_json(f"{BASE_API_URL}/users/v3")
+        user = user_payload.get("user") if isinstance(user_payload, dict) else None
+        if not isinstance(user, dict):
+            user = user_payload if isinstance(user_payload, dict) else {}
+        voted_groups = user.get("votedPaperGroups") if isinstance(user, dict) else None
+        liked = group_id in (voted_groups if isinstance(voted_groups, list) else [])
         response = await self._core.request(
             "POST",
-            f"{BASE_API_URL}/v2/papers/{group_id}/vote",
+            f"{BASE_API_URL}/papers/v3/{group_id}/like",
+            params={"liked": str(not liked).lower()},
         )
         return self._response_payload(response)
 
@@ -684,7 +691,7 @@ class PapersAPI:
         return self._require_version_id(identifier, resolved, operation="Paper sidecar lookup")
 
     def _require_auth(self, message: str) -> None:
-        if not self._core.authorization:
+        if not self._core.has_auth:
             raise AuthRequiredError(message)
 
     def _require_group_id(
@@ -768,6 +775,11 @@ class PapersAPI:
                 "title": normalized_title or None,
                 "tag": normalized_tag,
                 "parentCommentId": parent_comment_id,
+                "anchorPosition": None,
+                "focusPosition": None,
+                "highlightRects": None,
+                "selectedText": None,
+                "highlightColor": None,
             },
         )
         payload = self._response_payload(response)
