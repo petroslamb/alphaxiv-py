@@ -96,7 +96,10 @@ def test_build_saved_browser_cookie_auth_exposes_cookie_names() -> None:
     )
 
     assert saved_auth.access_token == ""
-    assert saved_auth.cookie_header == "__Secure-alphaxiv_auth.session_token=secret; ignored_without_value"
+    assert (
+        saved_auth.cookie_header
+        == "__Secure-alphaxiv_auth.session_token=secret; ignored_without_value"
+    )
     assert saved_auth.auth_headers == {
         "Cookie": "__Secure-alphaxiv_auth.session_token=secret; ignored_without_value"
     }

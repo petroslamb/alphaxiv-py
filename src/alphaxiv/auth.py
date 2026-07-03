@@ -37,9 +37,7 @@ ALPHAXIV_COOKIE_URLS = (
     "https://www.alphaxiv.org",
     BASE_API_URL,
 )
-BROWSER_AUTH_COOKIE_NAMES = (
-    "__Secure-alphaxiv_auth.session_token",
-)
+BROWSER_AUTH_COOKIE_NAMES = ("__Secure-alphaxiv_auth.session_token",)
 
 
 def _coalesce_string(*values: Any) -> str | None:
