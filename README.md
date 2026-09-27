@@ -240,6 +240,23 @@ asyncio.run(main())
 `AlphaXivClient.from_saved_browser_auth()` reuses the auth captured by `alphaxiv auth login-web`.
 `AlphaXivClient.from_saved_auth(prefer_browser=True)` prefers the saved web login and falls back to the saved API key.
 
+## Official alphaXiv MCP Server
+
+alphaXiv also provides an official MCP server for native MCP clients at:
+
+```text
+https://api.alphaxiv.org/mcp/v1
+```
+
+The MCP server is a separate integration surface from this package. Use `alphaxiv-py` when you
+want the Python SDK or CLI for direct API access, and use the MCP server when an MCP-capable client
+should call alphaXiv research tools directly.
+
+The endpoint uses Streamable HTTP. Interactive clients authenticate through OAuth in a browser;
+non-interactive clients can instead send an alphaXiv API key as an `Authorization: Bearer <key>`
+header. See the [official MCP documentation](https://www.alphaxiv.org/docs/mcp) for supported
+clients, setup instructions, and the available tools.
+
 ## Agent Integrations
 
 This repo ships agent-facing guidance in two forms:
