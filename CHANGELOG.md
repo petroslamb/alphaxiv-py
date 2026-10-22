@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.1 - 2026-10-22
+
+- Restore topic search and feed filter lookup using the public alphaXiv topic
+  catalog after retirement of the semantic topic search endpoint. Matching now
+  uses normalized lexical lookup by topic code or label.
+- Accept valid empty event lists while rejecting malformed API responses.
+- Expand topic search regression tests and public live smoke coverage.
+
 ## 0.7.0 - 2026-07-02
 
 - Restored browser-backed web auth for the current alphaXiv Better Auth session

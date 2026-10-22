@@ -112,7 +112,7 @@ def test_cli_public_search_and_feed_smoke(
         env=isolated_cli_env,
     )
     assert_cli_ok(filter_search_json, "feed", "filters", "search", "agentic", "--json")
-    assert '"topics": [' in filter_search_json.output
+    assert "agentic-frameworks" in json.loads(filter_search_json.output)["topics"]
 
 
 def test_cli_public_events_smoke(
@@ -128,8 +128,8 @@ def test_cli_public_events_smoke(
     )
     assert_cli_ok(events_json, "events", "list", "--json")
     events_payload = json.loads(events_json.output)
-    assert events_payload["events"]
-    assert events_payload["events"][0]["title"]
+    assert isinstance(events_payload["events"], list)
+    assert all(event["title"] for event in events_payload["events"])
 
 
 def test_cli_public_context_and_paper_reads_smoke(

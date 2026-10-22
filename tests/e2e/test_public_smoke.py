@@ -16,6 +16,10 @@ async def test_public_search_smoke() -> None:
     async with AlphaXivClient() as client:
         results = await client.search.papers("attention is all you need")
         rich_results = await client.search.papers_rich("attention")
+        topics = await client.search.closest_topics("agentic")
+        homepage = await client.search.homepage("attention")
+    assert "agentic-frameworks" in topics
+    assert homepage.papers
     assert results
     assert any("attention" in result.title.lower() for result in results)
     assert rich_results
@@ -27,7 +31,7 @@ async def test_public_events_smoke() -> None:
     require_live_smoke()
     async with AlphaXivClient() as client:
         events = await client.events.list()
-    assert events
+    assert isinstance(events, list)
     assert all(event.title for event in events)
 
 

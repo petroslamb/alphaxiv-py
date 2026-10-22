@@ -34,7 +34,6 @@ from tests.fixtures import (
     RICH_PAPER_SEARCH_PAYLOAD,
     SEARCH_PAYLOAD,
     SIMILAR_PAPERS_PAYLOAD,
-    TOPIC_SEARCH_PAYLOAD,
     TRANSCRIPT_PAYLOAD,
     URL_METADATA_PAYLOAD,
 )
@@ -210,11 +209,6 @@ async def test_homepage_search_and_feed(httpx_mock) -> None:
     )
     httpx_mock.add_response(
         method="GET",
-        url="https://api.alphaxiv.org/v1/search/closest-topic?input=reinforcement+learning",
-        json=TOPIC_SEARCH_PAYLOAD,
-    )
-    httpx_mock.add_response(
-        method="GET",
         url="https://api.alphaxiv.org/organizations/v2/top",
         json=ORGANIZATION_SEARCH_PAYLOAD,
     )
@@ -241,7 +235,7 @@ async def test_homepage_search_and_feed(httpx_mock) -> None:
         )
 
     assert results.organizations[0].name == "MIT"
-    assert results.topics == ["deep-reinforcement-learning", "reinforcement-learning"]
+    assert results.topics == ["reinforcement-learning", "deep-reinforcement-learning"]
     assert filters.organizations[0].slug == "mit"
     assert len(cards) == 2
     assert cards[1].paper_id == "2512.24601"
@@ -252,11 +246,6 @@ async def test_homepage_search_and_feed(httpx_mock) -> None:
 async def test_feed_filter_search(httpx_mock) -> None:
     httpx_mock.add_response(
         method="GET",
-        url="https://api.alphaxiv.org/v1/search/closest-topic?input=agentic",
-        json={"data": ["agentic-frameworks", "agents"]},
-    )
-    httpx_mock.add_response(
-        method="GET",
         url="https://api.alphaxiv.org/organizations/v2/search?q=agentic",
         json=ORGANIZATION_SEARCH_PAYLOAD,
     )
@@ -264,7 +253,7 @@ async def test_feed_filter_search(httpx_mock) -> None:
     async with AlphaXivClient() as client:
         results = await client.explore.search_filters("agentic")
 
-    assert results.topics == ["agentic-frameworks", "agents"]
+    assert results.topics == ["agentic-frameworks"]
     assert results.organizations[0].name == "MIT"
 
 
@@ -1670,3 +1659,21 @@ async def test_assistant_ask_schema_error_mentions_model(httpx_mock) -> None:
     async with AlphaXivClient(api_key="axv1_test-token") as client:
         with pytest.raises(APIError, match="model 'broken-model'"):
             await client.assistant.ask("Tell me about Helios.", model="broken-model")
+
+
+@pytest.mark.asyncio
+async def test_events_list_empty(httpx_mock) -> None:
+    httpx_mock.add_response(url="https://api.alphaxiv.org/events/v1", json=[])
+    async with AlphaXivClient() as client:
+        assert await client.events.list() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [{"events": []}, {"error": "unavailable"}, [None]])
+async def test_events_list_rejects_malformed_response(httpx_mock, payload) -> None:
+    from alphaxiv.exceptions import APIError
+
+    httpx_mock.add_response(url="https://api.alphaxiv.org/events/v1", json=payload)
+    async with AlphaXivClient() as client:
+        with pytest.raises(APIError, match="Unexpected events response"):
+            await client.events.list()

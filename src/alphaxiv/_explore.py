@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 
 from ._core import BASE_API_URL, ClientCore
+from ._topics import search_topics
 from .types import ExploreFilterOptions, FeedCard, FeedFilterSearchResults, OrganizationResult
 
 FEED_SORTS = ("Hot", "Likes", "GitHub", "Twitter (X)")
@@ -124,22 +124,11 @@ class ExploreAPI:
         )
 
     async def search_filters(self, query: str) -> FeedFilterSearchResults:
-        topic_payload, organization_payload = await asyncio.gather(
-            self._core.get_json(
-                f"{BASE_API_URL}/v1/search/closest-topic",
-                params={"input": query},
-            ),
-            self._core.get_json(
-                f"{BASE_API_URL}/organizations/v2/search",
-                params={"q": query},
-            ),
+        topics = search_topics(query)
+        organization_payload = await self._core.get_json(
+            f"{BASE_API_URL}/organizations/v2/search",
+            params={"q": query},
         )
-
-        topics: list[str] = []
-        if isinstance(topic_payload, dict):
-            data = topic_payload.get("data")
-            if isinstance(data, list):
-                topics = [str(item) for item in data if isinstance(item, str)]
 
         organizations: list[OrganizationResult] = []
         if isinstance(organization_payload, list):
@@ -154,7 +143,7 @@ class ExploreAPI:
             topics=topics,
             organizations=organizations,
             raw={
-                "topics": topic_payload,
+                "topics": {"data": topics},
                 "organizations": organization_payload,
             },
         )

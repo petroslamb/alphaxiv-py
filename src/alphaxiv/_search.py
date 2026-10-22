@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from ._core import BASE_API_URL, ClientCore
+from ._topics import search_topics
 from .types import HomepageSearchResults, OrganizationResult, RichPaperSearchResult, SearchResult
 
 
@@ -46,13 +47,8 @@ class SearchAPI:
         return [OrganizationResult.from_payload(item) for item in payload if isinstance(item, dict)]
 
     async def closest_topics(self, query: str) -> list[str]:
-        payload = await self._core.get_json(
-            f"{BASE_API_URL}/v1/search/closest-topic",
-            params={"input": query},
-        )
-        if not isinstance(payload, dict):
-            return []
-        return [str(item) for item in payload.get("data") or []]
+        """Search the bundled public topic catalog by code or label."""
+        return search_topics(query)
 
     async def homepage(self, query: str, include_private: bool = False) -> HomepageSearchResults:
         papers, organizations, topics = await asyncio.gather(

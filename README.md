@@ -112,7 +112,7 @@ alphaxiv search all "graph neural networks for molecules"
 alphaxiv search papers "graph neural networks for molecules"
 alphaxiv search papers "graph neural networks for molecules" --json
 alphaxiv search organizations "graph neural networks for molecules"
-alphaxiv search topics "graph neural networks for molecules"
+alphaxiv search topics "graph neural networks"
 alphaxiv assistant list
 alphaxiv assistant list --json
 alphaxiv assistant model
@@ -185,7 +185,7 @@ async def main() -> None:
 
         papers = await client.search.papers("graph neural networks for molecules")
         organizations = await client.search.organizations("graph neural networks for molecules")
-        topics = await client.search.closest_topics("graph neural networks for molecules")
+        topics = await client.search.closest_topics("graph neural networks")
         print(papers[0].paper_id, organizations[0].name, topics[0])
 
         filter_search = await client.explore.search_filters("agentic")
@@ -318,3 +318,12 @@ High-confusion distinctions:
 - [Development](docs/development.md)
 - [Releasing](docs/releasing.md)
 - [API inventory](docs/api-inventory.md)
+
+Topic lookup (`search topics`, `search.closest_topics`, and `feed filters search`)
+searches the bundled alphaXiv public category catalog by code or label, ignoring
+case and punctuation. The upstream semantic closest-topic endpoint was retired;
+lookup now uses lexical matches, so an unmatched phrase returns no topics.
+The catalog was verified against the website on 22 October 2026.
+
+The public events endpoint may return an empty list when no events are listed.
+Live smoke tests accept that valid state while malformed response shapes still fail.
